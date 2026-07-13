@@ -2,93 +2,12 @@
 
 #include "net/HttpClient.h"
 
-#include <QHostAddress>
+#include "FakeRelayServer.h"
+
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
-#include <QTcpServer>
-#include <QTcpSocket>
 #include <QTest>
-
-namespace {
-
-QByteArray httpResponse(int statusCode, const QByteArray& statusText, const QByteArray& body)
-{
-    QByteArray response = "HTTP/1.1 " + QByteArray::number(statusCode) + " " + statusText + "\r\n";
-    response += "Content-Type: application/json\r\n";
-    response += "Content-Length: " + QByteArray::number(body.size()) + "\r\n";
-    response += "Connection: close\r\n";
-    response += "\r\n";
-    response += body;
-    return response;
-}
-
-// Same real-QTcpServer harness as Task 13's HttpClientTest (FakeRelayServer)
-// — accepts one connection, captures the raw request, replies with a canned
-// response once the request (headers + any Content-Length body) is fully
-// received.
-class FakeRelayServer : public QObject
-{
-public:
-    explicit FakeRelayServer(QByteArray response)
-        : m_response(std::move(response))
-    {
-        m_server.listen(QHostAddress::LocalHost);
-        connect(&m_server, &QTcpServer::newConnection, this, &FakeRelayServer::onNewConnection);
-    }
-
-    quint16 port() const { return m_server.serverPort(); }
-    const QByteArray& receivedRequest() const { return m_received; }
-
-    // Parses the JSON body out of the captured raw request.
-    QJsonObject receivedJsonBody() const
-    {
-        const int headerEnd = m_received.indexOf("\r\n\r\n");
-        if (headerEnd < 0)
-            return {};
-        const QByteArray body = m_received.mid(headerEnd + 4);
-        return QJsonDocument::fromJson(body).object();
-    }
-
-private:
-    void onNewConnection()
-    {
-        QTcpSocket* socket = m_server.nextPendingConnection();
-        connect(socket, &QTcpSocket::readyRead, this, [this, socket]() {
-            m_received += socket->readAll();
-            if (!requestComplete())
-                return;
-            socket->write(m_response);
-            socket->flush();
-            socket->disconnectFromHost();
-        });
-    }
-
-    bool requestComplete() const
-    {
-        const int headerEnd = m_received.indexOf("\r\n\r\n");
-        if (headerEnd < 0)
-            return false;
-        const QByteArray headers = m_received.left(headerEnd);
-        const int idx = headers.indexOf("Content-Length:");
-        if (idx < 0)
-            return true;
-        int lineEnd = headers.indexOf("\r\n", idx);
-        if (lineEnd < 0)
-            lineEnd = headers.size();
-        bool ok = false;
-        const int contentLength = headers.mid(idx + 15, lineEnd - idx - 15).trimmed().toInt(&ok);
-        if (!ok)
-            return true;
-        return m_received.size() >= headerEnd + 4 + contentLength;
-    }
-
-    QTcpServer m_server;
-    QByteArray m_response;
-    QByteArray m_received;
-};
-
-} // namespace
 
 class NativeRegistrationClientTest : public QObject
 {
