@@ -42,7 +42,15 @@ public:
         QList<QPair<QString, QString>> headers;
     };
 
-    explicit HttpClient(QNetworkAccessManager& manager);
+    // transferTimeoutMs guards waitForReply()'s QEventLoop against a
+    // hung/silent server that never emits QNetworkReply::finished (no
+    // response, no error) -- without it, the calling thread blocks forever.
+    // Only applied to the injected manager if it doesn't already have a
+    // transfer timeout configured (manager.transferTimeout() == 0), so a
+    // caller's own configuration is never clobbered. Exposed as a
+    // constructor parameter (rather than hardcoded) so tests can pass a
+    // short override instead of waiting out the real default.
+    explicit HttpClient(QNetworkAccessManager& manager, int transferTimeoutMs = 30000);
 
     // HttpResult never decodes JSON: decoding into a concrete struct is each
     // Task 14-18 client's own responsibility (QJsonDocument::fromJson on

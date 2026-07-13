@@ -8,6 +8,7 @@
 #include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QTcpServer>
+#include <QTcpSocket>
 #include <QTest>
 
 class HttpClientTest : public QObject
@@ -21,6 +22,7 @@ private slots:
     void putSendsJsonBodyAndContentTypeHeader();
     void delSendsQueryParamsWithNoBody();
     void transportFailureWhenNothingListens();
+    void transportFailureWhenServerHangs();
 };
 
 void HttpClientTest::getSuccessReturnsBodyUnmodifiedAndPreservesExistingQuery()
@@ -141,6 +143,35 @@ void HttpClientTest::transportFailureWhenNothingListens()
     QCOMPARE(*result.error, NetworkError::Transport);
     QCOMPARE(result.statusCode, 0);
     QVERIFY(!result.detail.isEmpty());
+}
+
+void HttpClientTest::transportFailureWhenServerHangs()
+{
+    // Accepts the connection but never writes a response -- simulates a
+    // hung/silent server, which used to leave waitForReply()'s QEventLoop
+    // spinning forever since nothing ever emits QNetworkReply::finished.
+    // Uses a short (100ms) constructor-injected timeout override so this
+    // test stays fast/deterministic rather than waiting out the real
+    // 30-second default.
+    QTcpServer server;
+    QVERIFY(server.listen(QHostAddress::LocalHost));
+    QTcpSocket* accepted = nullptr;
+    QObject::connect(&server, &QTcpServer::newConnection, &server, [&server, &accepted]() {
+        accepted = server.nextPendingConnection();
+    });
+
+    QNetworkAccessManager manager;
+    HttpClient client(manager, 100);
+
+    const QUrl url(QStringLiteral("http://127.0.0.1:%1/api/thing").arg(server.serverPort()));
+    const HttpClient::HttpResult result = client.get(url, {});
+
+    QVERIFY(result.error.has_value());
+    QCOMPARE(*result.error, NetworkError::Transport);
+    QCOMPARE(result.statusCode, 0);
+    QVERIFY(!result.detail.isEmpty());
+
+    delete accepted;
 }
 
 QTEST_GUILESS_MAIN(HttpClientTest)

@@ -7,9 +7,16 @@
 #include <QNetworkRequest>
 #include <QUrlQuery>
 
-HttpClient::HttpClient(QNetworkAccessManager& manager)
+HttpClient::HttpClient(QNetworkAccessManager& manager, int transferTimeoutMs)
     : m_manager(manager)
 {
+    // A manager with no transfer timeout configured (the Qt default) leaves
+    // waitForReply()'s QEventLoop waiting on ::finished forever if a server
+    // accepts the connection but never responds. transferTimeout() == 0
+    // means "unset" per Qt docs, so only set it in that case -- a caller
+    // that configured its own timeout on the injected manager keeps it.
+    if (m_manager.transferTimeout() == 0)
+        m_manager.setTransferTimeout(transferTimeoutMs);
 }
 
 HttpClient::HttpResult HttpClient::get(const QUrl& url, const QList<QPair<QString, QString>>& query,
