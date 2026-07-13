@@ -1,12 +1,31 @@
+#include "platform/SecureStoreKeychain.h"
 #include "push/UnifiedPushConnector.h"
 #include "theme/ThemeController.h"
 
+#include "db/ContactDao.h"
+#include "db/Database.h"
+#include "db/EmailDao.h"
+#include "db/FolderDao.h"
+#include "db/PendingContactChangeDao.h"
+#include "db/PushDao.h"
+#include "domain/ContactSyncRepository.h"
+#include "domain/DeviceRegistrationService.h"
+#include "domain/KeywordRepository.h"
+#include "domain/MailRepository.h"
+#include "domain/PairingStore.h"
+#include "net/ContactSyncClient.h"
+#include "net/HttpClient.h"
+#include "net/MfaResponseClient.h"
+#include "net/NativeRegistrationClient.h"
+#include "net/RelayMailSource.h"
+#include "stores/CursorStore.h"
 #include "stores/SettingsStore.h"
 
 #include <QDebug>
 #include <QDir>
 #include <QFontDatabase>
 #include <QGuiApplication>
+#include <QNetworkAccessManager>
 #include <QQmlApplicationEngine>
 #include <QStandardPaths>
 #include <QUrl>
@@ -150,6 +169,80 @@ int main(int argc, char* argv[])
     ThemeController themeController(settingsStore);
     qmlRegisterSingletonInstance<ThemeController>(
         "com.urlxl.LlamaMail", 1, 0, "Theme", &themeController);
+
+    // Task 31: composition root for the rest of core/db, core/net, and
+    // core/domain -- every later Phase 6 task (32-34) builds its
+    // QObject-derived controller against references into this graph rather
+    // than constructing its own copies. Everything below is a main() local,
+    // same lifetime tier as settingsStore/themeController above (declared
+    // before QQmlApplicationEngine, destroyed in reverse declaration order
+    // at the end of main()). Order matters: each object below only takes
+    // references/handles to objects already constructed above it.
+    //
+    // 1. Database -- AppDataLocation (not AppConfigLocation, which
+    // settingsDir above already claimed for settings.ini) is the XDG-correct
+    // place for a real on-disk database file. A failed open() has no
+    // reasonable degraded mode -- every DAO below hands out a live
+    // QSqlDatabase& into this object, so treat it as fatal.
+    const QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QDir().mkpath(dataDir);
+    Database database;
+    if (!database.open(dataDir + QStringLiteral("/llamamail.db")))
+        qFatal("main: Database::open failed for %s", qPrintable(dataDir + QStringLiteral("/llamamail.db")));
+
+    // 2. DAOs, each borrowing database.handle(). FolderDao/PushDao have no
+    // Phase 6 caller yet -- constructed anyway per the task-31 brief, since
+    // they're part of the schema Phase 2 already built and future phases
+    // will need them wired here rather than re-deriving this block.
+    EmailDao emailDao(database.handle());
+    ContactDao contactDao(database.handle());
+    FolderDao folderDao(database.handle());
+    PushDao pushDao(database.handle());
+    PendingContactChangeDao pendingContactChangeDao(database.handle());
+
+    // 3. SecureStoreKeychain -- the app/platform/ Secret-Service-backed
+    // SecureStore built in Phase 2 (SecureStoreFile is for tests/UT only).
+    // Reuses the same "com.urlxl.LlamaMail" service name KDBusService and
+    // UnifiedPushConnector already use above, for consistency.
+    SecureStoreKeychain secureStore(QStringLiteral("com.urlxl.LlamaMail"));
+
+    // 4. CursorStore -- reuses settingsDir (already computed for
+    // SettingsStore above), not a second directory-resolution block.
+    CursorStore cursorStore(settingsDir + QStringLiteral("/cursors.ini"));
+
+    // 5. PairingStore -- the one shared "are we paired" contract every
+    // repository below reads instead of re-deriving SecureStore key names.
+    PairingStore pairingStore(secureStore);
+
+    // 6. HttpClient -- default transferTimeoutMs. networkManager must
+    // outlive httpClient and every net/ client below that borrows it
+    // transitively.
+    QNetworkAccessManager networkManager;
+    HttpClient httpClient(networkManager);
+
+    // 7. core/net clients -- thin wire-format wrappers around httpClient.
+    RelayMailSource relayMailSource(httpClient);
+    ContactSyncClient contactSyncClient(httpClient);
+    MfaResponseClient mfaResponseClient(httpClient);
+    NativeRegistrationClient nativeRegistrationClient(httpClient);
+
+    // 8. core/domain repositories -- the layer Tasks 32-34's QML-facing
+    // controllers actually call into.
+    MailRepository mailRepository(relayMailSource, emailDao, pairingStore, cursorStore);
+    KeywordRepository keywordRepository(settingsStore);
+    ContactSyncRepository contactSyncRepository(contactSyncClient, contactDao, pendingContactChangeDao,
+                                                 cursorStore, pairingStore);
+    DeviceRegistrationService deviceRegistrationService(nativeRegistrationClient, pairingStore, settingsStore);
+
+    // 9. Deliberately NOT wired here: PushRepository/PushNotificationClient/
+    // NtfySubscriber/TransportStateMachine. Settings->Notifications only
+    // needs SettingsStore::deliveryMode()/transport() (already available
+    // above); full push-arrival wiring is deferred to Phase 7 per the
+    // Phase 4 final-review note.
+    //
+    // 10. Nothing above is registered with QML yet -- Tasks 32-34 add
+    // "construct controller X, register it" here, right above
+    // QQmlApplicationEngine, without reordering anything in this block.
 
     QQmlApplicationEngine engine;
     engine.load(QUrl(QStringLiteral("qrc:/qml/MobileRoot.qml")));
