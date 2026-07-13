@@ -17,6 +17,10 @@ add_library(llamacore STATIC
   db/PushDao.cpp
   db/PushDao.h
   db/SqlUtil.h
+  stores/SettingsStore.cpp
+  stores/SettingsStore.h
+  stores/CursorStore.cpp
+  stores/CursorStore.h
 )
 
 file(READ ${CMAKE_CURRENT_SOURCE_DIR}/db/migrations/001_initial.sql LLAMA_MIGRATION_001_SQL)
