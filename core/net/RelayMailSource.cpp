@@ -170,6 +170,11 @@ InboxFetchResult RelayMailSource::fetchInbox(const QUrl& serverBaseUrl, const Re
         out.byTab.insert(it.key(), items);
     }
 
+    out.isDelta = json.value(QStringLiteral("delta")).toBool();
+    out.cursor = static_cast<qint64>(json.value(QStringLiteral("cursor")).toDouble());
+    for (const QJsonValue& value : json.value(QStringLiteral("removed")).toArray())
+        out.removed.append(value.toString());
+
     return out;
 }
 

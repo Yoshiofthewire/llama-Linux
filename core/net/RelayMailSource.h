@@ -38,6 +38,14 @@ struct InboxFetchResult
     QStringList tabs;
     // QMap sorts by key alphabetically -- iterate via tabs (order-preserving) if wire/tab order matters, not this map directly.
     QMap<QString, QVector<InboxEmailItem>> byTab;
+    // Delta (`since=`) response fields -- confirmed against
+    // internal/api/server.go's delta branch of handleInbox (~line 2097-2105):
+    // a delta response is {tabs, byTab, delta:true, cursor, removed:[messageId,...]},
+    // a full-snapshot response (no `since` sent) is just {tabs, byTab} with
+    // none of these three keys present, hence the false/0/empty defaults.
+    bool isDelta = false;   // json "delta", defaults false when absent (full-snapshot response)
+    qint64 cursor = 0;      // json "cursor", meaningless when !isDelta
+    QStringList removed;    // json "removed", always empty when !isDelta
 };
 
 // One entry of GET /api/inbox/folders's "folders" array.

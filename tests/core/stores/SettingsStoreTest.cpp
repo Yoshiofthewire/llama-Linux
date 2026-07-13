@@ -13,6 +13,7 @@ private slots:
     void manualMobileOverrideRoundTrips();
     void pushServerBaseUrlRoundTrips();
     void pushDeliveryFieldsRoundTrip();
+    void keywordVisibleDefaultsTrueUntilExplicitlyToggled();
 
 private:
     QString tempFilePath(QTemporaryDir& dir, const QString& name) const;
@@ -89,6 +90,23 @@ void SettingsStoreTest::pushDeliveryFieldsRoundTrip()
     QCOMPARE(store.deliveryMode(), QStringLiteral("pull"));
     QCOMPARE(store.pullEndpoint(), QStringLiteral("http://relay.example/api/notifications/native/pull"));
     QCOMPARE(store.transport(), QStringLiteral("unifiedpush"));
+}
+
+void SettingsStoreTest::keywordVisibleDefaultsTrueUntilExplicitlyToggled()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    SettingsStore store(tempFilePath(dir, QStringLiteral("settings.ini")));
+
+    QCOMPARE(store.keywordVisible(QStringLiteral("Work")), true);
+
+    store.setKeywordVisible(QStringLiteral("Work"), false);
+    QCOMPARE(store.keywordVisible(QStringLiteral("Work")), false);
+    // An unrelated keyword that was never toggled stays visible.
+    QCOMPARE(store.keywordVisible(QStringLiteral("Personal")), true);
+
+    store.setKeywordVisible(QStringLiteral("Work"), true);
+    QCOMPARE(store.keywordVisible(QStringLiteral("Work")), true);
 }
 
 QTEST_GUILESS_MAIN(SettingsStoreTest)

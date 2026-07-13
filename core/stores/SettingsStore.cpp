@@ -9,6 +9,11 @@ constexpr auto kPullEndpointKey = "push/pullEndpoint";
 constexpr auto kTransportKey = "push/transport";
 
 const QString kDefaultThemeId = QStringLiteral("Dark Matter");
+
+QString keywordVisibleKey(const QString& keyword)
+{
+    return QStringLiteral("keywords/%1").arg(keyword);
+}
 const QString kDefaultPushServerBaseUrl = QStringLiteral("https://ntfy.sh");
 } // namespace
 
@@ -80,4 +85,14 @@ QString SettingsStore::transport() const
 void SettingsStore::setTransport(const QString& transport)
 {
     m_settings.setValue(kTransportKey, transport);
+}
+
+bool SettingsStore::keywordVisible(const QString& keyword) const
+{
+    return m_settings.value(keywordVisibleKey(keyword), true).toBool();
+}
+
+void SettingsStore::setKeywordVisible(const QString& keyword, bool visible)
+{
+    m_settings.setValue(keywordVisibleKey(keyword), visible);
 }

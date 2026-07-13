@@ -12,6 +12,8 @@ private slots:
     void init();
     void roundTripsInsertUpdateDelete();
     void findsByFolderAndAll();
+    void deleteByFolderRemovesOnlyThatFolder();
+    void replaceFolderSnapshotWipesOnlyTargetFolderAndInsertsGivenEmails();
 
 private:
     Database m_db;
@@ -86,6 +88,74 @@ void EmailDaoTest::findsByFolderAndAll()
 
     QVERIFY(dao.deleteAll());
     QCOMPARE(dao.findAll().size(), 0);
+}
+
+void EmailDaoTest::deleteByFolderRemovesOnlyThatFolder()
+{
+    EmailDao dao(m_db.handle());
+
+    Email inboxEmail;
+    inboxEmail.messageId = QStringLiteral("msg-inbox");
+    inboxEmail.folder = QStringLiteral("INBOX");
+    inboxEmail.atUtc = QStringLiteral("2026-01-01T00:00:00Z");
+    QVERIFY(dao.insertOrReplace(inboxEmail));
+
+    Email sentEmail;
+    sentEmail.messageId = QStringLiteral("msg-sent");
+    sentEmail.folder = QStringLiteral("Sent");
+    sentEmail.atUtc = QStringLiteral("2026-01-02T00:00:00Z");
+    QVERIFY(dao.insertOrReplace(sentEmail));
+
+    QVERIFY(dao.deleteByFolder(QStringLiteral("INBOX")));
+
+    QVERIFY(!dao.findById(QStringLiteral("msg-inbox")).has_value());
+    QVERIFY(dao.findById(QStringLiteral("msg-sent")).has_value());
+}
+
+void EmailDaoTest::replaceFolderSnapshotWipesOnlyTargetFolderAndInsertsGivenEmails()
+{
+    EmailDao dao(m_db.handle());
+
+    Email sentEmail;
+    sentEmail.messageId = QStringLiteral("msg-sent");
+    sentEmail.folder = QStringLiteral("Sent");
+    sentEmail.atUtc = QStringLiteral("2026-01-02T00:00:00Z");
+    QVERIFY(dao.insertOrReplace(sentEmail));
+
+    Email staleInboxEmail;
+    staleInboxEmail.messageId = QStringLiteral("msg-stale");
+    staleInboxEmail.folder = QStringLiteral("INBOX");
+    staleInboxEmail.atUtc = QStringLiteral("2026-01-01T00:00:00Z");
+    QVERIFY(dao.insertOrReplace(staleInboxEmail));
+
+    Email newInboxEmail1;
+    newInboxEmail1.messageId = QStringLiteral("msg-new-1");
+    newInboxEmail1.folder = QStringLiteral("INBOX");
+    newInboxEmail1.subject = QStringLiteral("New 1");
+    newInboxEmail1.atUtc = QStringLiteral("2026-01-03T00:00:00Z");
+
+    Email newInboxEmail2;
+    newInboxEmail2.messageId = QStringLiteral("msg-new-2");
+    newInboxEmail2.folder = QStringLiteral("INBOX");
+    newInboxEmail2.subject = QStringLiteral("New 2");
+    newInboxEmail2.atUtc = QStringLiteral("2026-01-04T00:00:00Z");
+
+    QVERIFY(dao.replaceFolderSnapshot(QStringLiteral("INBOX"), { newInboxEmail1, newInboxEmail2 }));
+
+    // The stale row in the replaced folder is gone.
+    QVERIFY(!dao.findById(QStringLiteral("msg-stale")).has_value());
+
+    // The two new rows round-trip.
+    const QVector<Email> inboxEmails = dao.findByFolder(QStringLiteral("INBOX"));
+    QCOMPARE(inboxEmails.size(), 2);
+    QVERIFY(dao.findById(QStringLiteral("msg-new-1")).has_value());
+    QCOMPARE(*dao.findById(QStringLiteral("msg-new-1")), newInboxEmail1);
+    QVERIFY(dao.findById(QStringLiteral("msg-new-2")).has_value());
+    QCOMPARE(*dao.findById(QStringLiteral("msg-new-2")), newInboxEmail2);
+
+    // A row in a different folder survives untouched.
+    QVERIFY(dao.findById(QStringLiteral("msg-sent")).has_value());
+    QCOMPARE(*dao.findById(QStringLiteral("msg-sent")), sentEmail);
 }
 
 QTEST_GUILESS_MAIN(EmailDaoTest)

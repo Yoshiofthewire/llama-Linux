@@ -19,6 +19,13 @@ public:
     bool deleteById(const QString& messageId);
     bool deleteAll();
 
+    bool deleteByFolder(const QString& folder);
+
+    // Wipes `folder` and inserts every email in `emails` (each with .folder
+    // already set to `folder` by the caller), wrapped in one transaction so
+    // a partial failure doesn't leave the folder half-replaced.
+    bool replaceFolderSnapshot(const QString& folder, const QVector<Email>& emails);
+
 private:
     QSqlDatabase& m_db;
 };

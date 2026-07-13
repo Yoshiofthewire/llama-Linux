@@ -128,3 +128,31 @@ bool EmailDao::deleteAll()
     QSqlQuery query(m_db);
     return query.exec(QStringLiteral("DELETE FROM emails"));
 }
+
+bool EmailDao::deleteByFolder(const QString& folder)
+{
+    QSqlQuery query(m_db);
+    query.prepare(QStringLiteral("DELETE FROM emails WHERE folder = :folder"));
+    query.bindValue(QStringLiteral(":folder"), folder);
+    return query.exec();
+}
+
+bool EmailDao::replaceFolderSnapshot(const QString& folder, const QVector<Email>& emails)
+{
+    if (!m_db.transaction())
+        return false;
+
+    if (!deleteByFolder(folder)) {
+        m_db.rollback();
+        return false;
+    }
+
+    for (const Email& email : emails) {
+        if (!insertOrReplace(email)) {
+            m_db.rollback();
+            return false;
+        }
+    }
+
+    return m_db.commit();
+}

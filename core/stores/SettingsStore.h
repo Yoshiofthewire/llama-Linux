@@ -35,6 +35,15 @@ public:
     QString transport() const;         // server-normalized value from the last successful registration
     void setTransport(const QString& transport);
 
+    // Keywords -- per-keyword inbox-tab visibility, sparse map with no upper
+    // bound on keyword count. "Never toggled" is distinct from "explicitly
+    // hidden": true is the default, matching KeywordSettingsStore.swift's
+    // isVisible default (KeywordSettings::visible's own struct-level `false`
+    // default is unrelated -- that's just the zero-value for the type, not
+    // this store's default-visible policy).
+    bool keywordVisible(const QString& keyword) const; // true if never toggled
+    void setKeywordVisible(const QString& keyword, bool visible);
+
 private:
     QSettings m_settings;
 };
