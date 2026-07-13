@@ -37,5 +37,14 @@ target_sources(llamamail PRIVATE
 )
 target_link_libraries(llamamail PRIVATE KUnifiedPush Qt6::DBus)
 
+# KDBusService (KF6DBusAddons) wraps app startup in main.cpp to claim the
+# com.urlxl.LlamaMail well-known bus name in Unique mode and emit
+# activateRequested on duplicate-instance launches -- confirmed installed via
+# `pacman -Qs kdbusaddons`, providing the standard KDE convenience wrapper
+# over plain QDBusConnection registration for Task 11's D-Bus activation
+# proof. See main.cpp for why org.freedesktop.Application/Activate isn't used.
+find_package(KF6DBusAddons REQUIRED)
+target_link_libraries(llamamail PRIVATE KF6::DBusAddons)
+
 include(GNUInstallDirs)
 install(TARGETS llamamail RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
