@@ -22,5 +22,20 @@ target_sources(llamamail PRIVATE
 )
 target_link_libraries(llamamail PRIVATE Qt6Keychain::Qt6Keychain)
 
+# UnifiedPushConnector talks to the local KUnifiedPush distributor over
+# D-Bus, so it belongs in the app executable, never in llamacore. The
+# KUnifiedPushConfig.cmake package exports a plain "KUnifiedPush" target
+# (no namespace), confirmed against the installed .cmake files. Qt6::DBus is
+# needed directly (not just transitively via KUnifiedPush) because
+# UnifiedPushConnector registers its own well-known D-Bus service name for
+# the distributor's callback delivery -- see UnifiedPushConnector.cpp.
+find_package(KUnifiedPush REQUIRED)
+find_package(Qt6 REQUIRED COMPONENTS DBus)
+target_sources(llamamail PRIVATE
+  push/UnifiedPushConnector.cpp
+  push/UnifiedPushConnector.h
+)
+target_link_libraries(llamamail PRIVATE KUnifiedPush Qt6::DBus)
+
 include(GNUInstallDirs)
 install(TARGETS llamamail RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
