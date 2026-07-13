@@ -93,6 +93,10 @@ HttpClient::HttpResult HttpClient::waitForReply(QNetworkReply* reply) const
     HttpResult result;
     result.statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     result.body = reply->readAll();
+    const QList<QNetworkReply::RawHeaderPair> rawHeaders = reply->rawHeaderPairs();
+    result.headers.reserve(rawHeaders.size());
+    for (const auto& header : rawHeaders)
+        result.headers.append({ QString::fromLatin1(header.first), QString::fromLatin1(header.second) });
 
     if (result.statusCode != 0) {
         // Got an HTTP response — map by status code even if QNetworkReply

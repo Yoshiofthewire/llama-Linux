@@ -16,11 +16,19 @@
 #include <utility>
 
 // Builds a raw HTTP/1.1 response with Content-Type/Content-Length/Connection
-// headers set, for FakeRelayServer to hand back verbatim.
-inline QByteArray httpResponse(int statusCode, const QByteArray& statusText, const QByteArray& body)
+// headers set, for FakeRelayServer to hand back verbatim. contentType and
+// extraHeaders default to the original JSON-only shape used by Tasks 13-17;
+// Task 18's attachment-download test needs a raw (non-JSON) body plus a
+// hand-written Content-Disposition header, hence the two added parameters
+// rather than a second function -- existing 3-arg call sites are unaffected.
+inline QByteArray httpResponse(int statusCode, const QByteArray& statusText, const QByteArray& body,
+                                const QByteArray& contentType = "application/json",
+                                const QList<QPair<QByteArray, QByteArray>>& extraHeaders = {})
 {
     QByteArray response = "HTTP/1.1 " + QByteArray::number(statusCode) + " " + statusText + "\r\n";
-    response += "Content-Type: application/json\r\n";
+    response += "Content-Type: " + contentType + "\r\n";
+    for (const auto& header : extraHeaders)
+        response += header.first + ": " + header.second + "\r\n";
     response += "Content-Length: " + QByteArray::number(body.size()) + "\r\n";
     response += "Connection: close\r\n";
     response += "\r\n";

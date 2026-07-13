@@ -28,6 +28,15 @@ private slots:
 
     void performActionMoveIncludesTargetMailboxInRequestBody();
     void performActionReadOmitsTargetMailboxFromRequestBodyButResponseCarriesEmptyString();
+
+    void sendMailJoinsRecipientsAndBase64EncodesAttachmentByteForByte();
+    void sendMailSendsEmptyAttachmentsArrayWhenNoneProvided();
+    void sendMailParsesAlwaysPresentWarningField();
+
+    void listAttachmentsSendsMailboxMessageIdAndAuthAsQueryParamsAndParsesResult();
+
+    void downloadAttachmentReturnsRawBytesAndParsesFilenameFromContentDisposition();
+    void downloadAttachmentMapsNotFoundFrom404();
 };
 
 void RelayMailSourceTest::fetchInboxMapsTwoTabsWithAtUtcPassthroughAndOptionalFields()
@@ -346,6 +355,192 @@ void RelayMailSourceTest::performActionReadOmitsTargetMailboxFromRequestBodyButR
     const QJsonObject sent = fake.receivedJsonBody();
     QCOMPARE(sent.value(QStringLiteral("action")).toString(), QStringLiteral("read"));
     QVERIFY(!sent.contains(QStringLiteral("targetMailbox")));
+}
+
+void RelayMailSourceTest::sendMailJoinsRecipientsAndBase64EncodesAttachmentByteForByte()
+{
+    FakeRelayServer fake(httpResponse(200, "OK", R"({"ok":true,"sentSaved":true,"warning":""})"));
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    RelayMailSource source(http);
+
+    // Exercise every byte value 0-255 so the base64 round trip can't pass
+    // by accident on a text-only fixture.
+    QByteArray attachmentBytes;
+    for (int i = 0; i < 256; ++i)
+        attachmentBytes.append(static_cast<char>(i));
+
+    MailAttachmentUpload attachment;
+    attachment.name = QStringLiteral("data.bin");
+    attachment.mimeType = QStringLiteral("application/octet-stream");
+    attachment.data = attachmentBytes;
+
+    const QUrl serverBaseUrl(QStringLiteral("http://127.0.0.1:%1").arg(fake.port()));
+    const RelayAuth auth{ QStringLiteral("sub-1"), QStringLiteral("hash-1") };
+    const SendMailResult result =
+        source.sendMail(serverBaseUrl, auth, QStringLiteral("a@example.com,b@example.com"),
+                         QStringLiteral("cc@example.com"), QString(), QStringLiteral("Hello"),
+                         QStringLiteral("Body text"), QStringLiteral("plain"), { attachment });
+
+    QVERIFY(!result.error.has_value());
+    QCOMPARE(result.ok, true);
+    QCOMPARE(result.sentSaved, true);
+    QVERIFY(result.warning.isEmpty());
+
+    QVERIFY(fake.receivedRequest().contains("POST /api/mail/send?"));
+    const QJsonObject sent = fake.receivedJsonBody();
+    // to/cc/bcc travel as comma-joined strings, not JSON arrays -- this
+    // client does not split/join on the caller's behalf.
+    QCOMPARE(sent.value(QStringLiteral("to")).toString(), QStringLiteral("a@example.com,b@example.com"));
+    QCOMPARE(sent.value(QStringLiteral("cc")).toString(), QStringLiteral("cc@example.com"));
+    QCOMPARE(sent.value(QStringLiteral("bcc")).toString(), QString());
+    QCOMPARE(sent.value(QStringLiteral("subject")).toString(), QStringLiteral("Hello"));
+    QCOMPARE(sent.value(QStringLiteral("body")).toString(), QStringLiteral("Body text"));
+    QCOMPARE(sent.value(QStringLiteral("mode")).toString(), QStringLiteral("plain"));
+
+    const QJsonArray sentAttachments = sent.value(QStringLiteral("attachments")).toArray();
+    QCOMPARE(sentAttachments.size(), 1);
+    const QJsonObject sentAttachment = sentAttachments.at(0).toObject();
+    QCOMPARE(sentAttachment.value(QStringLiteral("name")).toString(), QStringLiteral("data.bin"));
+    QCOMPARE(sentAttachment.value(QStringLiteral("mimeType")).toString(), QStringLiteral("application/octet-stream"));
+
+    // Byte-for-byte round trip: decode what actually reached the wire and
+    // compare against the original bytes, not merely "the field is present".
+    const QByteArray decoded =
+        QByteArray::fromBase64(sentAttachment.value(QStringLiteral("dataBase64")).toString().toLatin1());
+    QCOMPARE(decoded, attachmentBytes);
+}
+
+void RelayMailSourceTest::sendMailSendsEmptyAttachmentsArrayWhenNoneProvided()
+{
+    FakeRelayServer fake(httpResponse(200, "OK", R"({"ok":true,"sentSaved":true,"warning":""})"));
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    RelayMailSource source(http);
+
+    const QUrl serverBaseUrl(QStringLiteral("http://127.0.0.1:%1").arg(fake.port()));
+    const RelayAuth auth{ QStringLiteral("sub-1"), QStringLiteral("hash-1") };
+    source.sendMail(serverBaseUrl, auth, QStringLiteral("a@example.com"), QString(), QString(),
+                     QStringLiteral("Hi"), QStringLiteral("Body"), QStringLiteral("plain"), {});
+
+    const QJsonObject sent = fake.receivedJsonBody();
+    QVERIFY(sent.contains(QStringLiteral("attachments")));
+    QVERIFY(sent.value(QStringLiteral("attachments")).toArray().isEmpty());
+}
+
+void RelayMailSourceTest::sendMailParsesAlwaysPresentWarningField()
+{
+    // sentSaved=false + a non-empty warning is the "sent but Sent-folder
+    // save failed" case from handleMailSend -- ok is still true.
+    FakeRelayServer fake(httpResponse(
+        200, "OK",
+        R"({"ok":true,"sentSaved":false,"warning":"email sent but could not be saved to Sent folder"})"));
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    RelayMailSource source(http);
+
+    const QUrl serverBaseUrl(QStringLiteral("http://127.0.0.1:%1").arg(fake.port()));
+    const RelayAuth auth{ QStringLiteral("sub-1"), QStringLiteral("hash-1") };
+    const SendMailResult result = source.sendMail(serverBaseUrl, auth, QStringLiteral("a@example.com"), QString(),
+                                                    QString(), QStringLiteral("Hi"), QStringLiteral("Body"),
+                                                    QStringLiteral("plain"), {});
+
+    QVERIFY(!result.error.has_value());
+    QCOMPARE(result.ok, true);
+    QCOMPARE(result.sentSaved, false);
+    QCOMPARE(result.warning, QStringLiteral("email sent but could not be saved to Sent folder"));
+}
+
+void RelayMailSourceTest::listAttachmentsSendsMailboxMessageIdAndAuthAsQueryParamsAndParsesResult()
+{
+    const QByteArray body = R"(
+    {
+      "ok": true,
+      "attachments": [
+        {"index": 0, "name": "report.pdf", "mimeType": "application/pdf", "size": 1024},
+        {"index": 1, "name": "image.png", "mimeType": "image/png", "size": 2048}
+      ]
+    }
+    )";
+    FakeRelayServer fake(httpResponse(200, "OK", body));
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    RelayMailSource source(http);
+
+    const QUrl serverBaseUrl(QStringLiteral("http://127.0.0.1:%1").arg(fake.port()));
+    const RelayAuth auth{ QStringLiteral("sub-1"), QStringLiteral("hash-1") };
+    const ListAttachmentsResult result =
+        source.listAttachments(serverBaseUrl, auth, QStringLiteral("Inbox"), QStringLiteral("42"));
+
+    QVERIFY(!result.error.has_value());
+    QCOMPARE(result.attachments.size(), 2);
+    QCOMPARE(result.attachments.at(0).index, 0);
+    QCOMPARE(result.attachments.at(0).name, QStringLiteral("report.pdf"));
+    QCOMPARE(result.attachments.at(0).mimeType, QStringLiteral("application/pdf"));
+    QCOMPARE(result.attachments.at(0).size, 1024);
+    QCOMPARE(result.attachments.at(1).index, 1);
+    QCOMPARE(result.attachments.at(1).name, QStringLiteral("image.png"));
+    QCOMPARE(result.attachments.at(1).mimeType, QStringLiteral("image/png"));
+    QCOMPARE(result.attachments.at(1).size, 2048);
+
+    const QByteArray request = fake.receivedRequest();
+    QVERIFY(request.contains("GET /api/mail/attachments?"));
+    QVERIFY(request.contains("mailbox=Inbox"));
+    QVERIFY(request.contains("messageId=42"));
+    QVERIFY(request.contains("sub=sub-1"));
+    QVERIFY(request.contains("hash=hash-1"));
+}
+
+void RelayMailSourceTest::downloadAttachmentReturnsRawBytesAndParsesFilenameFromContentDisposition()
+{
+    // Every byte value 0-255, to confirm the raw body survives the round
+    // trip byte-for-byte rather than being treated as/mangled like text.
+    QByteArray rawBytes;
+    for (int i = 0; i < 256; ++i)
+        rawBytes.append(static_cast<char>(i));
+
+    // Hand-written Content-Disposition header matching Go's
+    // mime.FormatMediaType output shape exactly, including backslash-escaped
+    // quotes inside the quoted filename, to exercise the escape-aware parser.
+    FakeRelayServer fake(httpResponse(200, "OK", rawBytes, "application/pdf",
+                                       { { "Content-Disposition", R"(attachment; filename="My File \"v2\".pdf")" } }));
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    RelayMailSource source(http);
+
+    const QUrl serverBaseUrl(QStringLiteral("http://127.0.0.1:%1").arg(fake.port()));
+    const RelayAuth auth{ QStringLiteral("sub-1"), QStringLiteral("hash-1") };
+    const DownloadAttachmentResult result =
+        source.downloadAttachment(serverBaseUrl, auth, QStringLiteral("Inbox"), QStringLiteral("42"), 0);
+
+    QVERIFY(!result.error.has_value());
+    QCOMPARE(result.data, rawBytes);
+    QCOMPARE(result.mimeType, QStringLiteral("application/pdf"));
+    QCOMPARE(result.filename, QStringLiteral("My File \"v2\".pdf"));
+
+    const QByteArray request = fake.receivedRequest();
+    QVERIFY(request.contains("GET /api/mail/attachment?"));
+    QVERIFY(request.contains("mailbox=Inbox"));
+    QVERIFY(request.contains("messageId=42"));
+    QVERIFY(request.contains("index=0"));
+}
+
+void RelayMailSourceTest::downloadAttachmentMapsNotFoundFrom404()
+{
+    FakeRelayServer fake(
+        httpResponse(404, "Not Found", "attachment not found\n", "text/plain; charset=utf-8"));
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    RelayMailSource source(http);
+
+    const QUrl serverBaseUrl(QStringLiteral("http://127.0.0.1:%1").arg(fake.port()));
+    const RelayAuth auth{ QStringLiteral("sub-1"), QStringLiteral("hash-1") };
+    const DownloadAttachmentResult result =
+        source.downloadAttachment(serverBaseUrl, auth, QStringLiteral("Inbox"), QStringLiteral("42"), 99);
+
+    QVERIFY(result.error.has_value());
+    QCOMPARE(*result.error, NetworkError::Server);
+    QVERIFY(result.data.isEmpty());
 }
 
 QTEST_GUILESS_MAIN(RelayMailSourceTest)

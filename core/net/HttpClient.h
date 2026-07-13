@@ -34,6 +34,12 @@ public:
         int statusCode = 0;
         QByteArray body;
         QString detail; // human-readable detail for Transport/InvalidUrl failures; empty otherwise
+        // Response headers as received from the server, populated by all four
+        // verb methods below (via waitForReply). Added in Task 18 for the
+        // attachment-download endpoint, whose filename/mime type travel in
+        // Content-Disposition/Content-Type rather than the JSON body -- empty
+        // for the InvalidUrl early-return path, where no reply was made.
+        QList<QPair<QString, QString>> headers;
     };
 
     explicit HttpClient(QNetworkAccessManager& manager);

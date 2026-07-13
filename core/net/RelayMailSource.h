@@ -3,6 +3,7 @@
 #include "models/Email.h"
 #include "net/NetworkError.h"
 
+#include <QByteArray>
 #include <QMap>
 #include <QString>
 #include <QStringList>
@@ -116,12 +117,72 @@ struct ActionResult
     QString targetMailbox;
 };
 
-// Inbox fetch, folder CRUD, and inbox action calls against the Relay
-// backend's /api/inbox, /api/inbox/folders, and /api/inbox/actions
-// endpoints. Mail send/attachments (the two endpoints with binary/
-// multipart-adjacent payloads) are Task 18, not covered here. sub/hash
-// (RelayAuth) apply uniformly to every method here via query params,
-// confirmed against resolveMailAuthContext in the Go backend.
+// One entry of POST /api/mail/send's "attachments" request array. Holds raw
+// bytes -- sendMail base64-encodes into `dataBase64` on the wire itself, so
+// callers never have to think about the wire encoding, mirroring how
+// performAction's plain QString action keeps wire-format details inside
+// this class rather than pushed onto callers.
+struct MailAttachmentUpload
+{
+    QString name;
+    QString mimeType;
+    QByteArray data;
+
+    bool operator==(const MailAttachmentUpload&) const = default;
+};
+
+// POST /api/mail/send response: {ok, sentSaved, warning}. warning is always
+// present on the wire, even as "" when there's nothing to warn about --
+// same always-present-possibly-empty pattern as ActionResult::targetMailbox
+// above, confirmed against handleMailSend in the Go backend.
+struct SendMailResult
+{
+    std::optional<NetworkError> error;
+    QString detail;
+    bool ok = false;
+    bool sentSaved = false;
+    QString warning;
+};
+
+// One entry of GET /api/mail/attachments's "attachments" array (backend's
+// AttachmentInfo struct: index/name/mimeType/size, metadata only, no
+// content).
+struct MailAttachmentInfo
+{
+    int index = 0;
+    QString name;
+    QString mimeType;
+    int size = 0;
+
+    bool operator==(const MailAttachmentInfo&) const = default;
+};
+
+struct ListAttachmentsResult
+{
+    std::optional<NetworkError> error;
+    QString detail;
+    QVector<MailAttachmentInfo> attachments;
+};
+
+// GET /api/mail/attachment response: raw binary body, not JSON -- filename
+// and mime type travel in the Content-Disposition/Content-Type response
+// headers instead (Content-Disposition per Go's mime.FormatMediaType, i.e.
+// `attachment; filename="<name>"` with RFC 2045 quoted-string escaping).
+struct DownloadAttachmentResult
+{
+    std::optional<NetworkError> error;
+    QString detail;
+    QByteArray data;
+    QString mimeType;
+    QString filename;
+};
+
+// Inbox fetch, folder CRUD, inbox action, mail send, and attachment list/
+// download calls against the Relay backend's /api/inbox, /api/inbox/
+// folders, /api/inbox/actions, /api/mail/send, /api/mail/attachments, and
+// /api/mail/attachment endpoints. sub/hash (RelayAuth) apply uniformly to
+// every method here via query params, confirmed against
+// resolveMailAuthContext / withMailAuth in the Go backend.
 class RelayMailSource
 {
 public:
@@ -155,6 +216,29 @@ public:
     ActionResult performAction(const QUrl& serverBaseUrl, const RelayAuth& auth, const QString& action,
                                 const QStringList& messageIds, const QString& mailbox,
                                 const std::optional<QString>& targetMailbox) const;
+
+    // to/cc/bcc are comma-joined address-list strings on the wire (the
+    // server splits them via parseRecipientList) -- NOT JSON arrays, unlike
+    // performAction's messageIds. Callers are responsible for joining.
+    // mode is a plain QString ("plain"/"html", mailmsg.Message.Mode's known
+    // values) mirroring the plain-QString-action convention used by
+    // performAction, rather than a client-side enum. There is no mailbox
+    // parameter -- confirmed against decodeMailRequest/handleMailSend, send
+    // is not scoped to a mailbox the way fetch/actions are (it sends via
+    // SMTP using the account's configured credentials, then best-effort
+    // saves to Sent).
+    SendMailResult sendMail(const QUrl& serverBaseUrl, const RelayAuth& auth, const QString& to, const QString& cc,
+                             const QString& bcc, const QString& subject, const QString& body, const QString& mode,
+                             const QVector<MailAttachmentUpload>& attachments) const;
+
+    // messageId is an IMAP UID parsed server-side as an integer, but travels
+    // as an ordinary query-string value like everywhere else in this class
+    // -- no client-side validation/conversion needed.
+    ListAttachmentsResult listAttachments(const QUrl& serverBaseUrl, const RelayAuth& auth, const QString& mailbox,
+                                           const QString& messageId) const;
+
+    DownloadAttachmentResult downloadAttachment(const QUrl& serverBaseUrl, const RelayAuth& auth,
+                                                 const QString& mailbox, const QString& messageId, int index) const;
 
 private:
     HttpClient& m_httpClient;

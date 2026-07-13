@@ -78,6 +78,45 @@ ActionFailure actionFailureFromJson(const QJsonObject& obj)
     return failure;
 }
 
+MailAttachmentInfo mailAttachmentInfoFromJson(const QJsonObject& obj)
+{
+    MailAttachmentInfo item;
+    item.index = obj.value(QStringLiteral("index")).toInt();
+    item.name = obj.value(QStringLiteral("name")).toString();
+    item.mimeType = obj.value(QStringLiteral("mimeType")).toString();
+    item.size = obj.value(QStringLiteral("size")).toInt();
+    return item;
+}
+
+// Parses the filename out of a Content-Disposition header value shaped like
+// `attachment; filename="<value>"`, with backslash-escaped quotes/
+// backslashes inside the quoted string, per Go's mime.FormatMediaType (RFC
+// 2045 quoted-string) -- confirmed as the only shape the backend emits, so
+// this is deliberately not a general Content-Disposition/RFC 5987 parser.
+QString filenameFromContentDisposition(const QString& headerValue)
+{
+    const QString marker = QStringLiteral("filename=\"");
+    const int start = headerValue.indexOf(marker);
+    if (start < 0)
+        return {};
+
+    QString filename;
+    int i = start + marker.size();
+    while (i < headerValue.size()) {
+        const QChar ch = headerValue.at(i);
+        if (ch == QLatin1Char('\\') && i + 1 < headerValue.size()) {
+            filename += headerValue.at(i + 1);
+            i += 2;
+            continue;
+        }
+        if (ch == QLatin1Char('"'))
+            break;
+        filename += ch;
+        ++i;
+    }
+    return filename;
+}
+
 } // namespace
 
 RelayMailSource::RelayMailSource(HttpClient& httpClient)
@@ -310,5 +349,122 @@ ActionResult RelayMailSource::performAction(const QUrl& serverBaseUrl, const Rel
     for (const QJsonValue& value : json.value(QStringLiteral("failed")).toArray())
         out.failed.append(actionFailureFromJson(value.toObject()));
 
+    return out;
+}
+
+SendMailResult RelayMailSource::sendMail(const QUrl& serverBaseUrl, const RelayAuth& auth, const QString& to,
+                                          const QString& cc, const QString& bcc, const QString& subject,
+                                          const QString& body, const QString& mode,
+                                          const QVector<MailAttachmentUpload>& attachments) const
+{
+    QJsonArray attachmentsJson;
+    for (const MailAttachmentUpload& attachment : attachments) {
+        QJsonObject attachmentJson;
+        attachmentJson[QStringLiteral("name")] = attachment.name;
+        attachmentJson[QStringLiteral("mimeType")] = attachment.mimeType;
+        attachmentJson[QStringLiteral("dataBase64")] = QString::fromLatin1(attachment.data.toBase64());
+        attachmentsJson.append(attachmentJson);
+    }
+
+    QJsonObject requestBody;
+    requestBody[QStringLiteral("to")] = to;
+    requestBody[QStringLiteral("cc")] = cc;
+    requestBody[QStringLiteral("bcc")] = bcc;
+    requestBody[QStringLiteral("subject")] = subject;
+    requestBody[QStringLiteral("body")] = body;
+    requestBody[QStringLiteral("mode")] = mode;
+    requestBody[QStringLiteral("attachments")] = attachmentsJson;
+
+    const HttpClient::HttpResult result =
+        m_httpClient.post(endpointFor(serverBaseUrl, QStringLiteral("api/mail/send")), auth.queryItems(), requestBody);
+
+    SendMailResult out;
+    if (result.error.has_value()) {
+        out.error = result.error;
+        out.detail = !result.detail.isEmpty() ? result.detail
+                                               : QStringLiteral("Mail send failed with status %1").arg(result.statusCode);
+        return out;
+    }
+
+    QJsonParseError parseError{};
+    const QJsonDocument doc = parseBody(result.body, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+        out.error = NetworkError::Decoding;
+        out.detail = QStringLiteral("Failed to decode mail send response: %1").arg(parseError.errorString());
+        return out;
+    }
+
+    const QJsonObject json = doc.object();
+    out.ok = json.value(QStringLiteral("ok")).toBool();
+    out.sentSaved = json.value(QStringLiteral("sentSaved")).toBool();
+    out.warning = json.value(QStringLiteral("warning")).toString();
+    return out;
+}
+
+ListAttachmentsResult RelayMailSource::listAttachments(const QUrl& serverBaseUrl, const RelayAuth& auth,
+                                                         const QString& mailbox, const QString& messageId) const
+{
+    QList<QPair<QString, QString>> query = auth.queryItems();
+    query.append({ QStringLiteral("mailbox"), mailbox });
+    query.append({ QStringLiteral("messageId"), messageId });
+
+    const HttpClient::HttpResult result =
+        m_httpClient.get(endpointFor(serverBaseUrl, QStringLiteral("api/mail/attachments")), query);
+
+    ListAttachmentsResult out;
+    if (result.error.has_value()) {
+        out.error = result.error;
+        out.detail = !result.detail.isEmpty()
+            ? result.detail
+            : QStringLiteral("Attachment list failed with status %1").arg(result.statusCode);
+        return out;
+    }
+
+    QJsonParseError parseError{};
+    const QJsonDocument doc = parseBody(result.body, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+        out.error = NetworkError::Decoding;
+        out.detail = QStringLiteral("Failed to decode attachment list response: %1").arg(parseError.errorString());
+        return out;
+    }
+
+    const QJsonObject json = doc.object();
+    for (const QJsonValue& value : json.value(QStringLiteral("attachments")).toArray())
+        out.attachments.append(mailAttachmentInfoFromJson(value.toObject()));
+
+    return out;
+}
+
+DownloadAttachmentResult RelayMailSource::downloadAttachment(const QUrl& serverBaseUrl, const RelayAuth& auth,
+                                                               const QString& mailbox, const QString& messageId,
+                                                               int index) const
+{
+    QList<QPair<QString, QString>> query = auth.queryItems();
+    query.append({ QStringLiteral("mailbox"), mailbox });
+    query.append({ QStringLiteral("messageId"), messageId });
+    query.append({ QStringLiteral("index"), QString::number(index) });
+
+    const HttpClient::HttpResult result =
+        m_httpClient.get(endpointFor(serverBaseUrl, QStringLiteral("api/mail/attachment")), query);
+
+    DownloadAttachmentResult out;
+    if (result.error.has_value()) {
+        out.error = result.error;
+        out.detail = !result.detail.isEmpty()
+            ? result.detail
+            : QStringLiteral("Attachment download failed with status %1").arg(result.statusCode);
+        return out;
+    }
+
+    // Not JSON -- the body is the attachment's raw bytes verbatim, filename/
+    // mime type come from the response headers instead (see
+    // filenameFromContentDisposition above).
+    out.data = result.body;
+    for (const auto& header : result.headers) {
+        if (header.first.compare(QStringLiteral("Content-Type"), Qt::CaseInsensitive) == 0)
+            out.mimeType = header.second;
+        else if (header.first.compare(QStringLiteral("Content-Disposition"), Qt::CaseInsensitive) == 0)
+            out.filename = filenameFromContentDisposition(header.second);
+    }
     return out;
 }
