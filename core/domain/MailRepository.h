@@ -35,10 +35,16 @@ public:
 
     QVector<Email> cachedEmails(const QString& folder) const;
 
-    // forceFullResync sends since=0 explicitly (bypassing the stored
-    // cursor) for a user-initiated manual refresh; otherwise this method
-    // sends the CursorStore-persisted mail cursor (omitted when empty --
-    // first-ever fetch for this folder is a full snapshot).
+    // forceFullResync omits `since` from the request entirely (std::nullopt)
+    // for a user-initiated manual refresh, which is what triggers a true
+    // full-snapshot response from the backend -- per RelayMailSource's wire
+    // contract, `since` present at all (even literally 0) puts the mail
+    // endpoint into delta mode instead. (This is the opposite convention
+    // from ContactSyncClient, where since=0 really does mean "full sync" --
+    // a deliberate, documented wire-contract difference between the two
+    // endpoints, not a bug on either side.) Otherwise this method sends the
+    // CursorStore-persisted mail cursor (also omitted when empty --
+    // first-ever fetch for this folder is a full snapshot the same way).
     MailFetchOutcome refreshFolder(const QString& folder, bool forceFullResync = false);
 
 private:

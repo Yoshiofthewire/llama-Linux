@@ -26,6 +26,7 @@ private slots:
     void refreshFolderDeltaMergesNewUpdatedRemovedAndPersistsCursor();
     void refreshFolderMessageInTwoTabsProducesOneRowWithBothKeywords();
     void refreshFolderNotPairedReturnsNotPairedWithNoRequest();
+    void refreshFolderForceFullResyncOmitsSinceAndReplacesFolderCache();
 
 private:
     static void savePairing(PairingStore& pairingStore, quint16 port);
@@ -317,6 +318,85 @@ void MailRepositoryTest::refreshFolderNotPairedReturnsNotPairedWithNoRequest()
     const MailFetchOutcome outcome = repository.refreshFolder(QStringLiteral("INBOX"));
     QCOMPARE(outcome.outcome, MailRepositoryOutcome::NotPaired);
     QVERIFY(fake.receivedRequest().isEmpty());
+}
+
+void MailRepositoryTest::refreshFolderForceFullResyncOmitsSinceAndReplacesFolderCache()
+{
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    EmailDao emailDao(db.handle());
+
+    // Orphaned/stale cached email that the server's full-snapshot response
+    // below does not mention at all -- a genuine full-snapshot response
+    // carries no per-item "removed" list (that's a delta-only field), so the
+    // only way this row can be purged is via replaceFolderSnapshot's
+    // wholesale replace, not the delta-merge branch's targeted deletes.
+    Email staleEmail;
+    staleEmail.messageId = QStringLiteral("stale-orphan");
+    staleEmail.folder = QStringLiteral("INBOX");
+    staleEmail.atUtc = QStringLiteral("2026-01-01T00:00:00Z");
+    QVERIFY(emailDao.insertOrReplace(staleEmail));
+
+    // Genuine full-snapshot payload: no "delta"/"cursor"/"removed" keys,
+    // matching what a real omitted-`since` request gets back.
+    const QByteArray body = R"(
+    {
+      "tabs": ["Inbox"],
+      "byTab": {
+        "Inbox": [
+          {
+            "messageId": "fresh-1",
+            "sender": "alice@example.com",
+            "sentTo": "bob@example.com",
+            "cc": "",
+            "bcc": "",
+            "subject": "Still here",
+            "status": "unread",
+            "atUtc": "2026-07-10T00:00:00Z",
+            "hasAttachments": false,
+            "label": ""
+          }
+        ]
+      }
+    }
+    )";
+    FakeRelayServer fake(httpResponse(200, "OK", body));
+
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+    savePairing(pairingStore, fake.port());
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursor.ini")));
+    // A stored cursor exists, but forceFullResync must bypass it entirely --
+    // proving the omission isn't just an accident of an empty cursor.
+    cursorStore.setMailCursor(QStringLiteral("999"));
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    RelayMailSource source(http);
+    MailRepository repository(source, emailDao, pairingStore, cursorStore);
+
+    const MailFetchOutcome outcome = repository.refreshFolder(QStringLiteral("INBOX"), /*forceFullResync=*/true);
+    QCOMPARE(outcome.outcome, MailRepositoryOutcome::Success);
+
+    // Root-cause assertion: forceFullResync must omit `since` entirely, not
+    // send since=0 -- since present at all (even 0) puts the mail endpoint
+    // into delta mode per RelayMailSource's wire contract.
+    const QByteArray request = fake.receivedRequest();
+    QVERIFY(!request.contains("since="));
+    QVERIFY(request.contains("mailbox=INBOX"));
+
+    // Consequence assertion: the stale/orphaned row must not survive a
+    // forced full resync -- it only would if this had gone through the
+    // delta-merge branch instead of replaceFolderSnapshot.
+    QVERIFY(!emailDao.findById(QStringLiteral("stale-orphan")).has_value());
+    const QVector<Email> cached = emailDao.findByFolder(QStringLiteral("INBOX"));
+    QCOMPARE(cached.size(), 1);
+    QCOMPARE(cached.at(0).messageId, QStringLiteral("fresh-1"));
 }
 
 QTEST_GUILESS_MAIN(MailRepositoryTest)

@@ -57,10 +57,14 @@ MailFetchOutcome MailRepository::refreshFolder(const QString& folder, bool force
     const RelayAuth auth{ pairing->subscriberId, pairing->subscriberHash };
     const QUrl serverBaseUrl(pairing->serverBaseUrl);
 
+    // forceFullResync must leave `since` as std::nullopt (omitted from the
+    // request) rather than std::optional<qint64>(0) -- per RelayMailSource's
+    // wire contract, `since` present at all (even 0) puts the mail endpoint
+    // into delta mode, not full-snapshot mode. Only an omitted `since`
+    // triggers the full-snapshot response that routes through
+    // replaceFolderSnapshot below.
     std::optional<qint64> since;
-    if (forceFullResync) {
-        since = 0;
-    } else {
+    if (!forceFullResync) {
         const QString storedCursor = m_cursorStore.mailCursor();
         if (!storedCursor.isEmpty())
             since = storedCursor.toLongLong();
