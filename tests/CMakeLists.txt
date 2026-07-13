@@ -22,3 +22,22 @@ llama_add_test(PushDaoTest core/db/PushDaoTest.cpp)
 
 llama_add_test(SettingsStoreTest core/stores/SettingsStoreTest.cpp)
 llama_add_test(CursorStoreTest core/stores/CursorStoreTest.cpp)
+llama_add_test(SecureStoreFileTest core/stores/SecureStoreFileTest.cpp)
+
+# SecureStoreKeychain needs QtKeychain + app/ headers, unlike the plain
+# llama_add_test() targets above, and only builds under Qt6 (only
+# qtkeychain-qt6 is installed on this machine).
+if(LLAMA_QT6)
+  find_package(Qt6Keychain REQUIRED)
+  add_executable(SecureStoreKeychainTest
+    app/platform/SecureStoreKeychainTest.cpp
+    ${CMAKE_SOURCE_DIR}/app/platform/SecureStoreKeychain.cpp
+  )
+  target_include_directories(SecureStoreKeychainTest PRIVATE ${CMAKE_SOURCE_DIR}/app)
+  target_link_libraries(SecureStoreKeychainTest PRIVATE
+    llamacore
+    Qt6Keychain::Qt6Keychain
+    ${QT_TARGET_PREFIX}::Test
+  )
+  add_test(NAME SecureStoreKeychainTest COMMAND SecureStoreKeychainTest)
+endif()

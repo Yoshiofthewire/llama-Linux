@@ -21,6 +21,9 @@ add_library(llamacore STATIC
   stores/SettingsStore.h
   stores/CursorStore.cpp
   stores/CursorStore.h
+  stores/SecureStore.h
+  stores/SecureStoreFile.cpp
+  stores/SecureStoreFile.h
 )
 
 file(READ ${CMAKE_CURRENT_SOURCE_DIR}/db/migrations/001_initial.sql LLAMA_MIGRATION_001_SQL)
