@@ -1,6 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Llama Mail
-Exec=llamamail
+Exec=llamamail %u
 Icon=com.urlxl.LlamaMail
 Categories=Network;Email;
+MimeType=x-scheme-handler/llamalabels;

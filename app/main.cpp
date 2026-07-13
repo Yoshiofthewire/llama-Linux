@@ -7,6 +7,23 @@
 
 #include <KDBusService>
 
+// Task 12 stub router: scans a set of command-line-style arguments for a
+// llamalabels:// deep link and logs it. Real pairing-URL parsing (token
+// extraction, routing to a QML page, etc.) is a later phase -- this proof
+// only needs to demonstrate that the URL reaches application code, whether
+// via a fresh launch's argv or via KDBusService::activateRequested relaying
+// a second launch's argv to the already-running instance.
+static void routeDeepLink(const QStringList& arguments)
+{
+    for (const QString& argument : arguments) {
+        const QUrl url(argument);
+        if (url.scheme() == QStringLiteral("llamalabels")) {
+            qDebug() << "StubRouter: received deep link:" << url;
+            return;
+        }
+    }
+}
+
 int main(int argc, char* argv[])
 {
     QGuiApplication app(argc, argv);
@@ -38,7 +55,17 @@ int main(int argc, char* argv[])
                       [](const QStringList& arguments, const QString& workingDirectory) {
                           qDebug() << "KDBusService: activateRequested -- arguments:" << arguments
                                     << "workingDirectory:" << workingDirectory;
+                          // Task 12: a second `llamamail llamalabels://...` invocation gets
+                          // redirected here instead of spawning a duplicate process -- route
+                          // its argv through the same stub deep-link handler used at startup.
+                          routeDeepLink(arguments);
                       });
+
+    // Task 12: this process is the one that "won" KDBusService's Unique-mode
+    // registration, so also check its own argv for a llamalabels:// URL --
+    // covers the case where xdg-open launches llamamail fresh (nothing was
+    // running yet to redirect to).
+    routeDeepLink(app.arguments());
 
     QQmlApplicationEngine engine;
     engine.load(QUrl(QStringLiteral("qrc:/qml/MobileRoot.qml")));
