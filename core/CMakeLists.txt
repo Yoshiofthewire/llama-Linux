@@ -29,6 +29,10 @@ add_library(llamacore STATIC
   net/RelayAuth.h
   net/HttpClient.cpp
   net/HttpClient.h
+  net/NativeRegistrationClient.cpp
+  net/NativeRegistrationClient.h
+  net/PushNotificationClient.cpp
+  net/PushNotificationClient.h
 )
 
 file(READ ${CMAKE_CURRENT_SOURCE_DIR}/db/migrations/001_initial.sql LLAMA_MIGRATION_001_SQL)
