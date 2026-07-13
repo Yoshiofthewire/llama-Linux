@@ -1,8 +1,10 @@
 # Local tooling gaps
 
-Re-verified during Task 8 (Qt5 drop / Qt6-only build). 4 of the original 5
-items from the Task 1 checklist are now installed on this machine; one real
-gap remains, tracked below.
+Re-verified during Task 8 (Qt5 drop / Qt6-only build). All 5 of the original
+items from the Task 1 checklist are now installed on this machine. The one
+real gap tracked below — the `org.kde.Sdk` Flatpak runtime — is not one of
+those original 5; it's a newly-identified item surfaced by this
+re-verification pass.
 
 - **`extra-cmake-modules`** — installed (`extra-cmake-modules 6.27.0-1`,
   verify: `pacman -Q extra-cmake-modules`). The top-level `CMakeLists.txt`
@@ -45,5 +47,7 @@ enough to *run* KDE/Qt6 apps but not to *build* a Flatpak against KF6 —
 configured as a remote (both system and user), so fetching it is a single
 `flatpak install` away.
 
-This is the one real gap left from the original 5-item checklist. Task 9 in
-this batch resolves it — not addressed here.
+This is the one real gap surfaced by this re-verification pass — not one of
+the original 5 checklist items, but a newly-identified prerequisite for
+building the Flatpak. Task 9 in this batch resolves it — not addressed
+here.
