@@ -60,6 +60,12 @@ add_library(llamacore STATIC
   net/RelayMailSource.h
   net/NtfySubscriber.cpp
   net/NtfySubscriber.h
+  theme/ThemePalette.cpp
+  theme/ThemePalette.h
+  theme/AppTheme.cpp
+  theme/AppTheme.h
+  theme/SemanticColors.h
+  theme/Shape.h
 )
 
 file(READ ${CMAKE_CURRENT_SOURCE_DIR}/db/migrations/001_initial.sql LLAMA_MIGRATION_001_SQL)

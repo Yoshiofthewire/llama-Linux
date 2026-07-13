@@ -43,6 +43,9 @@ llama_add_test(ContactSyncClientTest core/net/ContactSyncClientTest.cpp)
 llama_add_test(RelayMailSourceTest core/net/RelayMailSourceTest.cpp)
 llama_add_test(NtfySubscriberTest core/net/NtfySubscriberTest.cpp)
 
+llama_add_test(ThemePaletteTest core/theme/ThemePaletteTest.cpp)
+llama_add_test(AppThemeTest core/theme/AppThemeTest.cpp)
+
 # SecureStoreKeychain needs QtKeychain + app/ headers, unlike the plain
 # llama_add_test() targets above, so it's its own bespoke add_executable
 # block rather than going through the helper.
