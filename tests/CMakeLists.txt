@@ -62,3 +62,26 @@ target_link_libraries(SecureStoreKeychainTest PRIVATE
   Qt6::Test
 )
 add_test(NAME SecureStoreKeychainTest COMMAND SecureStoreKeychainTest)
+
+# EmailListModel/MailController (Task 32) live in app/mail/, not llamacore
+# (see core/ boundary rule), so -- like SecureStoreKeychainTest above -- they
+# need their own bespoke add_executable block instead of llama_add_test():
+# app/ headers plus the app/mail/*.cpp sources compiled directly into the
+# test binary. Neither needs Qt6Keychain, so no extra find_package/
+# target_link_libraries beyond llamacore/Qt6::Test.
+add_executable(EmailListModelTest
+  app/mail/EmailListModelTest.cpp
+  ${CMAKE_SOURCE_DIR}/app/mail/EmailListModel.cpp
+)
+target_include_directories(EmailListModelTest PRIVATE ${CMAKE_SOURCE_DIR}/app)
+target_link_libraries(EmailListModelTest PRIVATE llamacore Qt6::Test)
+add_test(NAME EmailListModelTest COMMAND EmailListModelTest)
+
+add_executable(MailControllerTest
+  app/mail/MailControllerTest.cpp
+  ${CMAKE_SOURCE_DIR}/app/mail/EmailListModel.cpp
+  ${CMAKE_SOURCE_DIR}/app/mail/MailController.cpp
+)
+target_include_directories(MailControllerTest PRIVATE ${CMAKE_SOURCE_DIR}/app)
+target_link_libraries(MailControllerTest PRIVATE llamacore Qt6::Test)
+add_test(NAME MailControllerTest COMMAND MailControllerTest)

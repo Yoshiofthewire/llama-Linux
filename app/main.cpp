@@ -1,3 +1,4 @@
+#include "mail/MailController.h"
 #include "platform/SecureStoreKeychain.h"
 #include "push/UnifiedPushConnector.h"
 #include "theme/ThemeController.h"
@@ -243,6 +244,15 @@ int main(int argc, char* argv[])
     // 10. Nothing above is registered with QML yet -- Tasks 32-34 add
     // "construct controller X, register it" here, right above
     // QQmlApplicationEngine, without reordering anything in this block.
+
+    // Task 32: QML-facing bridge over mailRepository/relayMailSource/
+    // keywordRepository/pairingStore (all constructed above). Owns its
+    // EmailListModel (parented to itself); every network-calling slot on
+    // this controller blocks the GUI thread synchronously, same accepted
+    // tradeoff as every other Phase 6 controller (see global constraint 2).
+    MailController mailController(mailRepository, relayMailSource, keywordRepository, pairingStore);
+    qmlRegisterSingletonInstance<MailController>(
+        "com.urlxl.LlamaMail", 1, 0, "MailApp", &mailController);
 
     QQmlApplicationEngine engine;
     engine.load(QUrl(QStringLiteral("qrc:/qml/MobileRoot.qml")));

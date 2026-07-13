@@ -26,6 +26,19 @@ target_sources(llamamail PRIVATE
   resources/fonts.qrc
 )
 
+# MailController/EmailListModel (Task 32) wrap core/domain's MailRepository/
+# KeywordRepository/PairingStore and core/net's RelayMailSource as a QML
+# singleton ("MailApp") -- QObject/QAbstractListModel/QVariant, so app/ per
+# the core/ boundary rule, same as ThemeController above. No extra
+# find_package needed: QMimeDatabase/QStandardPaths/QFile are already part of
+# Qt6::Core, transitively available via Qt6::Quick.
+target_sources(llamamail PRIVATE
+  mail/EmailListModel.cpp
+  mail/EmailListModel.h
+  mail/MailController.cpp
+  mail/MailController.h
+)
+
 # SecureStoreKeychain talks to the Secret Service over QtDBus, so it belongs
 # in the app executable, never in llamacore.
 find_package(Qt6Keychain REQUIRED)
