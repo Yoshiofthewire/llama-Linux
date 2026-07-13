@@ -2,8 +2,6 @@
 
 #include <KUnifiedPush/Connector>
 
-#include <QDBusConnection>
-#include <QDBusError>
 #include <QDebug>
 
 UnifiedPushConnector::UnifiedPushConnector(const QString& serviceName, QObject* parent)
@@ -16,13 +14,10 @@ UnifiedPushConnector::UnifiedPushConnector(const QString& serviceName, QObject* 
     // name (observed via `busctl --user monitor`: it calls
     // Destination=<serviceName> Path=/org/unifiedpush/Connector
     // Interface=org.unifiedpush.Connector2). KUnifiedPush::Connector does
-    // not claim this name itself, so without this call the distributor's
-    // delivery attempt fails with "ServiceUnknown: The name is not
-    // activatable" and the endpoint/message never reaches us.
-    if (!QDBusConnection::sessionBus().registerService(serviceName)) {
-        qDebug() << "UnifiedPushConnector: failed to register D-Bus service name" << serviceName << ":"
-                  << QDBusConnection::sessionBus().lastError().message();
-    }
+    // not claim this name itself -- but this process's KDBusService
+    // (constructed in main.cpp before this class) already has, and it's the
+    // same D-Bus connection, so no registration call belongs here. See the
+    // comment at the KDBusService construction site in main.cpp.
 
     connect(m_connector, &KUnifiedPush::Connector::endpointChanged, this, [](const QString& endpoint) {
         qDebug() << "UnifiedPushConnector: endpoint changed:" << endpoint;

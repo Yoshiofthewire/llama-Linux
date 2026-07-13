@@ -50,6 +50,15 @@ int main(int argc, char* argv[])
     // duplicate process then quits on its own. Constructed before
     // QQmlApplicationEngine per KDBusService's own race-avoidance guidance:
     // export D-Bus objects before the event loop (app.exec()) runs.
+    //
+    // Must also stay constructed before UnifiedPushConnector below: this is
+    // what actually claims the "com.urlxl.LlamaMail" well-known bus name on
+    // the session bus. UnifiedPushConnector relies on that name already
+    // being owned by this same connection by the time it constructs -- it
+    // does not register the name itself. Reordering these two would make
+    // UnifiedPushConnector grab the name first, and KDBusService::Unique
+    // would then think another instance is already running and relay-and-quit
+    // on every launch.
     KDBusService dbusService(KDBusService::Unique);
     QObject::connect(&dbusService, &KDBusService::activateRequested, &dbusService,
                       [](const QStringList& arguments, const QString& workingDirectory) {

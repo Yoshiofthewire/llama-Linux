@@ -28,7 +28,7 @@ map, not a duplicate:
 core/       — libllamacore: models/net/db/stores/domain/theme, QtCore+Network+Sql only
 app/        — main.cpp, push/ (KUnifiedPush glue, Qt6-only), platform/ (SecureStore backends), qml/ (MobileRoot, DesktopRoot, pages, components)
 tests/      — QtTest, stubbed HttpClient; ctest-driven
-packaging/  — flatpak/ (Flatpak manifest + metainfo) and click/ (Clickable manifest + apparmor)
+packaging/  — flatpak/ (Flatpak manifest + desktop file), dbus/ (session D-Bus activation .service), and click/ (Clickable manifest + apparmor)
 po/         — gettext catalogs
 docs/       — local tooling/setup notes (see docs/SETUP.md)
 ```
