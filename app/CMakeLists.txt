@@ -133,3 +133,51 @@ target_link_libraries(llamamail PRIVATE KF6::DBusAddons)
 
 include(GNUInstallDirs)
 install(TARGETS llamamail RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# Install app icon files (Task 44): scalable SVG + rasterized PNGs at
+# standard freedesktop hicolor theme sizes (16, 22, 24, 32, 48, 64, 128, 256 px).
+# com.urlxl.LlamaMail is the icon name referenced in the .desktop file.
+install(FILES
+  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/scalable/apps/com.urlxl.LlamaMail.svg
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
+)
+
+install(FILES
+  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/16x16/apps/com.urlxl.LlamaMail.png
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/16x16/apps
+)
+
+install(FILES
+  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/22x22/apps/com.urlxl.LlamaMail.png
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/22x22/apps
+)
+
+install(FILES
+  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/24x24/apps/com.urlxl.LlamaMail.png
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/24x24/apps
+)
+
+install(FILES
+  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/32x32/apps/com.urlxl.LlamaMail.png
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/32x32/apps
+)
+
+install(FILES
+  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/48x48/apps/com.urlxl.LlamaMail.png
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/48x48/apps
+)
+
+install(FILES
+  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/64x64/apps/com.urlxl.LlamaMail.png
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/64x64/apps
+)
+
+install(FILES
+  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/128x128/apps/com.urlxl.LlamaMail.png
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/128x128/apps
+)
+
+install(FILES
+  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/256x256/apps/com.urlxl.LlamaMail.png
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps
+)
