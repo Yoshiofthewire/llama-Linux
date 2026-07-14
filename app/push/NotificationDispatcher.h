@@ -26,8 +26,21 @@ public:
     // payload.emailSubject (falling back to payload.subject when empty) as
     // the text -- matches buildNativePushData's own field-naming intent
     // that senderName/emailSubject are the friendlier display copies, while
-    // sender/subject are the raw fallbacks for when those are absent.
+    // sender/subject are the raw fallbacks for when those are absent. Built
+    // via pickTitle()/pickText() below.
     void notify(const PushNotification& payload);
+
+    // Pure, deterministic fallback-selection logic backing notify()'s
+    // title/text. Public and static -- rather than anonymous-namespace
+    // file-scope helpers, the way PushPayloadParser.cpp's splitKeywords is
+    // done -- specifically so NotificationDispatcherTest can call them
+    // directly without touching KNotification/D-Bus. notify() itself has no
+    // fake/injectable seam to test through (see tests/CMakeLists.txt's
+    // Task-40 comment on why NotificationDispatcher has no test exercising
+    // notify() end-to-end), so these two functions are this class's only
+    // unit-testable surface.
+    static QString pickTitle(const PushNotification& payload);
+    static QString pickText(const PushNotification& payload);
 
 signals:
     // Emitted when the user activates the notification's default ("View")

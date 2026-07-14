@@ -130,14 +130,16 @@ add_test(NAME MfaControllerTest COMMAND MfaControllerTest)
 # above. Pure C++ over QJsonDocument (already part of Qt6::Core, transitively
 # available via llamacore), no extra find_package needed.
 #
-# NotificationDispatcher (also Task 40, app/push/) has no test here
-# deliberately: like UnifiedPushConnector (Task 10, same directory), it's a
-# thin wrapper around a concrete, un-mockable system integration point
-# (KNotification's real D-Bus round-trip to whatever org.freedesktop.
-# Notifications service is reachable, plus the notification server's own
-# ActionInvoked callback for the "View" action) -- there's no fake/injectable
-# seam to test through without building a mock notification server, which is
-# out of this task's scope. See task-40-report.md.
+# NotificationDispatcher's notify() itself has no test here deliberately:
+# like UnifiedPushConnector (Task 10, same directory), it's a thin wrapper
+# around a concrete, un-mockable system integration point (KNotification's
+# real D-Bus round-trip to whatever org.freedesktop.Notifications service is
+# reachable, plus the notification server's own ActionInvoked callback for
+# the "View" action) -- there's no fake/injectable seam to test through
+# without building a mock notification server, which is out of scope. See
+# task-40-report.md. Its pure title/text fallback-selection logic
+# (pickTitle/pickText) *is* covered, directly, by NotificationDispatcherTest
+# below.
 add_executable(PushPayloadParserTest
   app/push/PushPayloadParserTest.cpp
   ${CMAKE_SOURCE_DIR}/app/push/PushPayloadParser.cpp
@@ -145,3 +147,21 @@ add_executable(PushPayloadParserTest
 target_include_directories(PushPayloadParserTest PRIVATE ${CMAKE_SOURCE_DIR}/app)
 target_link_libraries(PushPayloadParserTest PRIVATE llamacore Qt6::Test)
 add_test(NAME PushPayloadParserTest COMMAND PushPayloadParserTest)
+
+# NotificationDispatcherTest (review follow-up to Task 40): covers only the
+# pure pickTitle()/pickText() static helpers, not notify() -- see the
+# PushPayloadParserTest comment above for why notify() itself stays
+# untested. Needs KF6::Notifications (same find_package as app/CMakeLists.txt)
+# because NotificationDispatcher.cpp still #includes <KNotification> for
+# notify(), even though this test never calls it -- same bespoke
+# add_executable pattern as PushPayloadParserTest/MailControllerTest above,
+# not llama_add_test(), since it needs app/ include dirs plus this extra
+# KF6 package.
+find_package(KF6Notifications REQUIRED)
+add_executable(NotificationDispatcherTest
+  app/push/NotificationDispatcherTest.cpp
+  ${CMAKE_SOURCE_DIR}/app/push/NotificationDispatcher.cpp
+)
+target_include_directories(NotificationDispatcherTest PRIVATE ${CMAKE_SOURCE_DIR}/app)
+target_link_libraries(NotificationDispatcherTest PRIVATE llamacore KF6::Notifications Qt6::Test)
+add_test(NAME NotificationDispatcherTest COMMAND NotificationDispatcherTest)
