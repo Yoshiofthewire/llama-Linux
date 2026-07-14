@@ -165,3 +165,17 @@ add_executable(NotificationDispatcherTest
 target_include_directories(NotificationDispatcherTest PRIVATE ${CMAKE_SOURCE_DIR}/app)
 target_link_libraries(NotificationDispatcherTest PRIVATE llamacore KF6::Notifications Qt6::Test)
 add_test(NAME NotificationDispatcherTest COMMAND NotificationDispatcherTest)
+
+# NtfyTopicProvisioner (Task 43 review-finding fix): generation/persistence
+# logic for the EmbeddedSubscriber tier's ntfy topic, extracted to app/push/
+# per that task's brief. Tests against a real SecureStoreFile (core/stores/,
+# already part of llamacore), same bespoke add_executable pattern as
+# PushPayloadParserTest above -- no extra find_package needed, plain QtCore
+# (QRandomGenerator).
+add_executable(NtfyTopicProvisionerTest
+  app/push/NtfyTopicProvisionerTest.cpp
+  ${CMAKE_SOURCE_DIR}/app/push/NtfyTopicProvisioner.cpp
+)
+target_include_directories(NtfyTopicProvisionerTest PRIVATE ${CMAKE_SOURCE_DIR}/app)
+target_link_libraries(NtfyTopicProvisionerTest PRIVATE llamacore Qt6::Test)
+add_test(NAME NtfyTopicProvisionerTest COMMAND NtfyTopicProvisionerTest)

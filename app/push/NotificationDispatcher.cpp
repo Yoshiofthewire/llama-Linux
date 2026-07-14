@@ -13,12 +13,25 @@ NotificationDispatcher::NotificationDispatcher(QObject* parent)
 
 QString NotificationDispatcher::pickTitle(const PushNotification& payload)
 {
-    return !payload.senderName.isEmpty() ? payload.senderName : payload.sender;
+    if (!payload.senderName.isEmpty())
+        return payload.senderName;
+    if (!payload.sender.isEmpty())
+        return payload.sender;
+    // Task 43 review-finding fix: last-resort fallback for tiers (currently
+    // only EmbeddedSubscriber, via NtfySubscriber's flat {title,message}
+    // envelope) that never populate senderName/sender at all. See the
+    // header comment for why this never changes the Distributor tier's
+    // already-correct rendering.
+    return payload.title;
 }
 
 QString NotificationDispatcher::pickText(const PushNotification& payload)
 {
-    return !payload.emailSubject.isEmpty() ? payload.emailSubject : payload.subject;
+    if (!payload.emailSubject.isEmpty())
+        return payload.emailSubject;
+    if (!payload.subject.isEmpty())
+        return payload.subject;
+    return payload.body;
 }
 
 void NotificationDispatcher::notify(const PushNotification& payload)

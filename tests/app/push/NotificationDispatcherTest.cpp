@@ -16,11 +16,13 @@ class NotificationDispatcherTest : public QObject
 private slots:
     void titleUsesSenderNameWhenPresent();
     void titleFallsBackToSenderWhenSenderNameEmpty();
-    void titleIsEmptyWhenBothEmpty();
+    void titleFallsBackToTitleWhenSenderNameAndSenderEmpty();
+    void titleIsEmptyWhenAllThreeEmpty();
 
     void textUsesEmailSubjectWhenPresent();
     void textFallsBackToSubjectWhenEmailSubjectEmpty();
-    void textIsEmptyWhenBothEmpty();
+    void textFallsBackToBodyWhenEmailSubjectAndSubjectEmpty();
+    void textIsEmptyWhenAllThreeEmpty();
 };
 
 void NotificationDispatcherTest::titleUsesSenderNameWhenPresent()
@@ -41,11 +43,25 @@ void NotificationDispatcherTest::titleFallsBackToSenderWhenSenderNameEmpty()
     QCOMPARE(NotificationDispatcher::pickTitle(payload), QStringLiteral("a@example.com"));
 }
 
-void NotificationDispatcherTest::titleIsEmptyWhenBothEmpty()
+void NotificationDispatcherTest::titleFallsBackToTitleWhenSenderNameAndSenderEmpty()
+{
+    // Covers the Task 43 review-finding fix: the EmbeddedSubscriber tier
+    // (main.cpp's NtfySubscriber-arrival lambda) only ever populates
+    // payload.title/payload.body, never senderName/sender.
+    PushNotification payload;
+    payload.senderName.clear();
+    payload.sender.clear();
+    payload.title = QStringLiteral("ntfy title");
+
+    QCOMPARE(NotificationDispatcher::pickTitle(payload), QStringLiteral("ntfy title"));
+}
+
+void NotificationDispatcherTest::titleIsEmptyWhenAllThreeEmpty()
 {
     PushNotification payload;
     payload.senderName.clear();
     payload.sender.clear();
+    payload.title.clear();
 
     QVERIFY(NotificationDispatcher::pickTitle(payload).isEmpty());
 }
@@ -68,11 +84,24 @@ void NotificationDispatcherTest::textFallsBackToSubjectWhenEmailSubjectEmpty()
     QCOMPARE(NotificationDispatcher::pickText(payload), QStringLiteral("Hello"));
 }
 
-void NotificationDispatcherTest::textIsEmptyWhenBothEmpty()
+void NotificationDispatcherTest::textFallsBackToBodyWhenEmailSubjectAndSubjectEmpty()
+{
+    // Covers the Task 43 review-finding fix -- see
+    // titleFallsBackToTitleWhenSenderNameAndSenderEmpty()'s comment above.
+    PushNotification payload;
+    payload.emailSubject.clear();
+    payload.subject.clear();
+    payload.body = QStringLiteral("ntfy message body");
+
+    QCOMPARE(NotificationDispatcher::pickText(payload), QStringLiteral("ntfy message body"));
+}
+
+void NotificationDispatcherTest::textIsEmptyWhenAllThreeEmpty()
 {
     PushNotification payload;
     payload.emailSubject.clear();
     payload.subject.clear();
+    payload.body.clear();
 
     QVERIFY(NotificationDispatcher::pickText(payload).isEmpty());
 }

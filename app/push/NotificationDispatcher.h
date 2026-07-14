@@ -22,16 +22,32 @@ public:
 
     // Builds and sends a KNotification for payload, with one default
     // ("View") action. Title/text field choice: payload.senderName
-    // (falling back to payload.sender when empty) as the title,
-    // payload.emailSubject (falling back to payload.subject when empty) as
-    // the text -- matches buildNativePushData's own field-naming intent
-    // that senderName/emailSubject are the friendlier display copies, while
-    // sender/subject are the raw fallbacks for when those are absent. Built
-    // via pickTitle()/pickText() below.
+    // (falling back to payload.sender, then to payload.title, when empty)
+    // as the title, payload.emailSubject (falling back to payload.subject,
+    // then to payload.body, when empty) as the text -- matches
+    // buildNativePushData's own field-naming intent that senderName/
+    // emailSubject are the friendlier display copies, while sender/subject
+    // are the raw fallbacks for when those are absent. The final title/body
+    // tier (Task 43 review-finding fix) exists for the EmbeddedSubscriber
+    // tier: main.cpp's NtfySubscriber-arrival lambda only ever populates
+    // payload.title/payload.body (ntfy's own {title,message} fields have no
+    // sender/subject equivalent), so without this fallback that tier always
+    // rendered an empty KNotification. Confirmed safe for the already-working
+    // Distributor tier too: backend/internal/processor/poller.go's
+    // buildNativePushData duplicates the same title/body values into
+    // data.title/data.body that it derives senderName/emailSubject from
+    // (buildNativeNotificationText: title="New Email" / body="You have a new
+    // email." whenever sender/subject are themselves empty), so this tier's
+    // data.title/data.body are never empty when senderName/sender (or
+    // emailSubject/subject) are -- this fallback never overrides an
+    // already-populated field, it only fires in the same both-empty case
+    // that previously rendered blank. Built via pickTitle()/pickText() below.
     void notify(const PushNotification& payload);
 
     // Pure, deterministic fallback-selection logic backing notify()'s
-    // title/text. Public and static -- rather than anonymous-namespace
+    // title/text: senderName/emailSubject first, then sender/subject, then
+    // (Task 43 review-finding fix) title/body when both prior fields are
+    // empty. Public and static -- rather than anonymous-namespace
     // file-scope helpers, the way PushPayloadParser.cpp's splitKeywords is
     // done -- specifically so NotificationDispatcherTest can call them
     // directly without touching KNotification/D-Bus. notify() itself has no

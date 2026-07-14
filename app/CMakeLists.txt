@@ -113,6 +113,15 @@ target_sources(llamamail PRIVATE
 )
 target_link_libraries(llamamail PRIVATE KF6::Notifications)
 
+# NtfyTopicProvisioner (Task 43 review-finding fix): generates/persists the
+# EmbeddedSubscriber tier's ntfy topic via SecureStore -- plain QtCore
+# (QRandomGenerator), no extra find_package needed. app/ per the core/
+# boundary rule, same as NotificationDispatcher/PushPayloadParser above.
+target_sources(llamamail PRIVATE
+  push/NtfyTopicProvisioner.cpp
+  push/NtfyTopicProvisioner.h
+)
+
 # KDBusService (KF6DBusAddons) wraps app startup in main.cpp to claim the
 # com.urlxl.LlamaMail well-known bus name in Unique mode and emit
 # activateRequested on duplicate-instance launches -- confirmed installed via

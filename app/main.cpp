@@ -4,6 +4,7 @@
 #include "pairing/PairingController.h"
 #include "platform/SecureStoreKeychain.h"
 #include "push/NotificationDispatcher.h"
+#include "push/NtfyTopicProvisioner.h"
 #include "push/PushPayloadParser.h"
 #include "push/UnifiedPushConnector.h"
 #include "theme/ThemeController.h"
@@ -306,26 +307,29 @@ int main(int argc, char* argv[])
     // further down, after pushConnector (KUnifiedPush) is constructed --
     // see the comment block right before pushConnector's construction.
     //
-    // NtfySubscriber's topic argument is empty here: this app has no
-    // existing source for it. Linux_QT_Client_Plan.md's design calls for a
-    // client-generated >=128-bit random ntfy topic, persisted in
-    // SecureStore (SecureStore.h documents an aspirational "ntfy-topic" key)
-    // and registered with the backend as the deviceToken via
-    // DeviceRegistrationService -- none of that generation/persistence/
-    // registration exists yet anywhere in this codebase (confirmed:
-    // DevicePairing.h's seven persisted fields have no topic among them,
-    // and nothing calls SecureStore with an "ntfy-topic" key). This is the
-    // same kind of orphaned plumbing as SettingsStore::pushServerBaseUrl()
-    // itself (see PairingController.h's comment on that gap) -- baseUrl
-    // below reads a real, already-tested getter; topic has no equivalent to
-    // read yet. An empty topic does not crash anything: NtfySubscriber's GET
-    // against an invalid path just fails, and TransportStateMachine's
-    // already-tested connectionLost handling drops straight to Polling, the
-    // same graceful fallback as a genuinely unreachable subscriber. See
-    // task-41-report.md for the full analysis; this is flagged there as a
-    // concern for a future task, not silently worked around here.
+    // Task 43 review-finding fix: NtfySubscriber's topic argument used to be
+    // an empty QString() here (see task-41-report.md) -- nothing generated or
+    // persisted a real one. NtfyTopicProvisioner::getOrCreateTopic()
+    // (app/push/, new this task) reads the persisted topic from secureStore
+    // (key "ntfy-topic", per SecureStore.h's own doc comment) if one already
+    // exists, or generates a fresh >=128-bit random one and persists it
+    // otherwise -- Linux_QT_Client_Plan.md's risk #8 design. Never log
+    // ntfyTopic itself (it is a bearer secret on this path, same logging
+    // discipline as endpoint URLs -- phase7-global-constraints.md item 6).
+    //
+    // Registering this topic with the backend as a deviceToken (so the relay
+    // actually knows where to publish) is a separate gap this task does not
+    // close -- DeviceRegistrationService::pair()'s deviceToken argument is
+    // still always QString() from PairingController (see its own "Known gap"
+    // doc comment), and wiring a second deviceToken source in for this tier
+    // would mean changing core/domain call signatures, out of this task's
+    // app/-layer-only scope. Without that, the EmbeddedSubscriber tier still
+    // cannot receive a real push end-to-end; only the fallback-to-Polling
+    // path (already tested) is reachable live today. Flagged here, not
+    // silently worked around.
     PushNotificationClient pushNotificationClient(httpClient);
-    NtfySubscriber ntfySubscriber(networkManager, settingsStore.pushServerBaseUrl(), QString());
+    const QString ntfyTopic = NtfyTopicProvisioner::getOrCreateTopic(secureStore);
+    NtfySubscriber ntfySubscriber(networkManager, settingsStore.pushServerBaseUrl(), ntfyTopic);
     PushRepository pushRepository(pushDao, cursorStore, pushNotificationClient, pairingStore, settingsStore);
     TransportStateMachine transportStateMachine(ntfySubscriber, pushRepository);
     NotificationDispatcher notificationDispatcher;
@@ -385,6 +389,26 @@ int main(int argc, char* argv[])
     PairingController pairingController(deviceRegistrationService, pairingStore, settingsStore);
     qmlRegisterSingletonInstance<PairingController>(
         "com.urlxl.LlamaMail", 1, 0, "Pairing", &pairingController);
+
+    // Task 43 review-finding fix: rotate the ntfy topic (SecureStore
+    // "ntfy-topic" key, see NtfyTopicProvisioner above) on every successful
+    // (re-)pair, per Linux_QT_Client_Plan.md's risk #8 ("rotated on
+    // re-pair"). pairingStateChanged() is PairingController's own
+    // already-existing signal for exactly this transition -- it fires from
+    // pairFromParsedParams() on every outcome, so the state is checked here
+    // rather than adding new re-pair-specific machinery to PairingController
+    // itself (out of this task's scope per its brief: wire an existing hook,
+    // don't build one). Note this only rotates the *persisted* secret --
+    // ntfySubscriber above was already constructed with whatever topic
+    // existed at startup and has no live topic-update seam (changing that
+    // would touch core/net/NtfySubscriber's core logic, also out of scope),
+    // so a rotation here takes effect starting from the next app launch, not
+    // mid-session.
+    QObject::connect(&pairingController, &PairingController::pairingStateChanged, &pairingController,
+                      [&pairingController, &secureStore]() {
+                          if (pairingController.pairingState() == QStringLiteral("paired"))
+                              NtfyTopicProvisioner::rotateTopic(secureStore);
+                      });
 
     // pairingController now exists -- point the pointer the KDBusService
     // activateRequested lambda above captured (by reference) at it, so a
