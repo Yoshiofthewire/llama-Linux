@@ -470,10 +470,28 @@ int main(int argc, char* argv[])
     // existing Pairing.qml/llamalabels://native-pair flow from Phase 6 and
     // is never triggered from here, even though this signal can fire before
     // the user has ever paired.
+    //
+    // Also feeds PairingController::setDeviceToken() (Task 43 fix): the
+    // backend's deviceToken field is required on the FIRST pairing request
+    // too, not just re-registration -- discovered live (a real pairing
+    // attempt failed with HTTP 400) since pairingController previously
+    // always sent an empty QString() on first pair. pairingController is
+    // constructed above (before pushConnector exists), so this is the same
+    // late-bound wiring shape as main.cpp's existing
+    // pairingControllerForDeepLinks pointer.
     QObject::connect(&pushConnector, &UnifiedPushConnector::endpointChanged, &pushConnector,
-                      [&deviceRegistrationService](const QString& endpoint) {
+                      [&deviceRegistrationService, &pairingController](const QString& endpoint) {
                           deviceRegistrationService.reregisterIfPaired(endpoint);
+                          pairingController.setDeviceToken(endpoint);
                       });
+    // Apply whatever endpoint is already known (if any) immediately, same
+    // reasoning as applicationStateChanged's initial-state call below --
+    // endpointChanged only fires on a future *change*, so a pairing attempt
+    // between now and the first real change would otherwise still see an
+    // empty token even though pushConnector may already hold a valid one
+    // from a prior run (KUnifiedPush persists registration across
+    // restarts).
+    pairingController.setDeviceToken(pushConnector.endpoint());
 
     // Distributor-tier arrival path -- independent of TransportStateMachine,
     // per constraint item 4. Parses the raw UnifiedPush message bytes with
@@ -481,6 +499,12 @@ int main(int argc, char* argv[])
     // PushRepository::recordPushArrival() and hands the parsed payload to
     // NotificationDispatcher; on failure, logs byte count only (never
     // content) and does nothing else.
+    //
+    // PushPayloadParser::parse() (Task 43 fix) also accepts the backend's
+    // sparser /api/notifications/test envelope, which has no messageId --
+    // PushDao/PushRepository::recordPushArrival() treat messageId as the
+    // required identity key, so persistence is skipped for a keyless
+    // result; the notification is still shown either way.
     QObject::connect(&pushConnector, &UnifiedPushConnector::messageReceived, &pushConnector,
                       [&pushRepository, &notificationDispatcher](const QByteArray& message) {
                           const std::optional<PushNotification> payload = PushPayloadParser::parse(message);
@@ -490,7 +514,8 @@ int main(int argc, char* argv[])
                                          << message.size() << "bytes";
                               return;
                           }
-                          pushRepository.recordPushArrival(*payload, QDateTime::currentMSecsSinceEpoch());
+                          if (!payload->messageId.isEmpty())
+                              pushRepository.recordPushArrival(*payload, QDateTime::currentMSecsSinceEpoch());
                           notificationDispatcher.notify(*payload);
                       });
 

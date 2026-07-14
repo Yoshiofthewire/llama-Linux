@@ -1,0 +1,11 @@
+[Global]
+IconName=mail-unread
+Name=Llama Mail
+Comment=Llama Mail notifications
+
+[Event/newMail]
+Name=New Mail
+Comment=A new email has arrived
+Icon=mail-unread
+Action=Popup
+ShowPopupsInDndMode=true

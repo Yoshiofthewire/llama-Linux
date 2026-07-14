@@ -8,8 +8,9 @@ class PushPayloadParserTest : public QObject
 
 private slots:
     void fullValidPayloadRoundTripsEveryField();
-    void missingDataObjectFailsGracefully();
-    void missingMessageIdFailsGracefully();
+    void completelyEmptyPayloadFailsGracefully();
+    void missingMessageIdStillProducesNotificationWhenTitleIsPresent();
+    void genericTestNotificationShapeFallsBackToOuterTitleAndBody();
     void emptyKeywordsStringProducesEmptyStringList();
     void malformedKeywordsWithExtraCommasDropsEmpties();
     void malformedJsonFailsGracefully();
@@ -37,17 +38,24 @@ void PushPayloadParserTest::fullValidPayloadRoundTripsEveryField()
     QCOMPARE(result->url, QStringLiteral("/read"));
 }
 
-void PushPayloadParserTest::missingDataObjectFailsGracefully()
+void PushPayloadParserTest::completelyEmptyPayloadFailsGracefully()
 {
-    const QByteArray body = R"({"title":"outer-title","body":"outer-body"})";
+    // No data object, no outer title/body -- nothing displayable anywhere,
+    // the one case that must still be rejected.
+    const QByteArray body = R"({})";
 
     const std::optional<PushNotification> result = PushPayloadParser::parse(body);
 
     QVERIFY(!result.has_value());
 }
 
-void PushPayloadParserTest::missingMessageIdFailsGracefully()
+void PushPayloadParserTest::missingMessageIdStillProducesNotificationWhenTitleIsPresent()
 {
+    // No mail identity, but data.title is present -- a real mail push
+    // always carries messageId, so this shape is hypothetical, but there's
+    // no reason to drop something displayable just because messageId is
+    // absent (see header comment: this parser only rejects payloads with
+    // nothing displayable at all).
     const QByteArray body = R"({"title":"outer-title","body":"outer-body",)"
                              R"("data":{"sender":"a@example.com","subject":"Hello",)"
                              R"("senderName":"Alice","emailSubject":"Hello there","Keywords":"work,urgent",)"
@@ -55,7 +63,31 @@ void PushPayloadParserTest::missingMessageIdFailsGracefully()
 
     const std::optional<PushNotification> result = PushPayloadParser::parse(body);
 
-    QVERIFY(!result.has_value());
+    QVERIFY(result.has_value());
+    QVERIFY(result->messageId.isEmpty());
+    // data's own title/body still win over the outer envelope's when both
+    // are present, same rule as the full-payload round-trip test above.
+    QCOMPARE(result->title, QStringLiteral("Alice"));
+    QCOMPARE(result->body, QStringLiteral("Hello there"));
+}
+
+void PushPayloadParserTest::genericTestNotificationShapeFallsBackToOuterTitleAndBody()
+{
+    // The real shape sent by the backend's POST /api/notifications/test
+    // (server.go's handleNotificationTest, "Send Test Notification" on the
+    // web app): only an outer title/body and a bare data.url, no
+    // data.messageId, no data.title/data.body at all.
+    const QByteArray body = R"({"title":"Llama Mail Test Notification",)"
+                             R"("body":"Push delivery is working across all subscribed devices.",)"
+                             R"("data":{"url":"/notifications"}})";
+
+    const std::optional<PushNotification> result = PushPayloadParser::parse(body);
+
+    QVERIFY(result.has_value());
+    QVERIFY(result->messageId.isEmpty());
+    QCOMPARE(result->title, QStringLiteral("Llama Mail Test Notification"));
+    QCOMPARE(result->body, QStringLiteral("Push delivery is working across all subscribed devices."));
+    QCOMPARE(result->url, QStringLiteral("/notifications"));
 }
 
 void PushPayloadParserTest::emptyKeywordsStringProducesEmptyStringList()

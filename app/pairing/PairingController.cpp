@@ -173,6 +173,11 @@ void PairingController::removePairing()
     refreshFromStore();
 }
 
+void PairingController::setDeviceToken(const QString& token)
+{
+    m_deviceToken = token;
+}
+
 bool PairingController::pairFromParsedParams(const QString& sub, const QString& hash, const QString& srv,
                                               const QString& pt, const QString& reg)
 {
@@ -189,10 +194,15 @@ bool PairingController::pairFromParsedParams(const QString& sub, const QString& 
     // device" field to the pairing UI if the plan wants one; nothing here
     // depends on it being non-empty.
 
-    // Known gap (see class doc comment / task-34-report.md): no real
-    // UnifiedPush endpoint is threaded through to this call yet, so
-    // deviceToken is always empty here.
-    const NativeRegistrationResult result = m_service.pair(params, QString());
+    // m_deviceToken is set via setDeviceToken(), called from main.cpp
+    // whenever UnifiedPushConnector reports its current endpoint (Task 43
+    // fix -- the backend rejects a first-time pairing request with a 400
+    // when deviceToken is empty, since the field is required). Still empty
+    // if the distributor hasn't reported an endpoint yet by the time the
+    // user completes pairing; the existing endpointChanged ->
+    // reregisterIfPaired wiring in main.cpp corrects a stale/empty token
+    // once one becomes available.
+    const NativeRegistrationResult result = m_service.pair(params, m_deviceToken);
 
     switch (result.outcome) {
     case RegistrationOutcome::Success:

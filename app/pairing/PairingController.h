@@ -88,6 +88,17 @@ public slots:
     bool pairFromPastedLink(const QString& text);
     void reset();         // sets pairingState back to "idle" (for a "Try Again" button after a failure)
     void removePairing(); // pairingStore.clear() + refreshFromStore()
+    // Late-bound, same pattern as main.cpp's pairingControllerForDeepLinks
+    // pointer (Task 34): UnifiedPushConnector is constructed after this
+    // class in main.cpp's dependency order, so main.cpp calls this whenever
+    // UnifiedPushConnector::endpointChanged fires (including once with the
+    // already-known endpoint right after pushConnector's construction).
+    // The backend's deviceToken field is required (POST
+    // /api/notifications/native/register) -- sending QString() here made
+    // every first-time pairing attempt fail with a 400, discovered during
+    // live E2E testing (Task 43). pairFromParsedParams() below now sends
+    // whatever this holds, empty or not, rather than always QString().
+    void setDeviceToken(const QString& token);
 
 signals:
     void pairingChanged();
@@ -96,7 +107,7 @@ signals:
 private:
     // Builds a PairingParams from already-validated fields, sets
     // pairingState="working", calls
-    // deviceRegistrationService.pair(params, QString()), maps
+    // deviceRegistrationService.pair(params, m_deviceToken), maps
     // RegistrationOutcome to pairingState/pairingError, calls
     // refreshFromStore() on success.
     bool pairFromParsedParams(const QString& sub, const QString& hash, const QString& srv, const QString& pt,
@@ -111,4 +122,5 @@ private:
     bool m_isPaired = false;
     QString m_pairedServerHost;
     QString m_deviceId;
+    QString m_deviceToken; // set via setDeviceToken(); empty until UnifiedPushConnector reports a real endpoint
 };
