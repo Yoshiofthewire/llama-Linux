@@ -138,8 +138,10 @@ Kirigami.ApplicationWindow {
     // component wrapped in a Kirigami.Page instead.
     Kirigami.OverlaySheet {
         id: settingsSheet
+        onOpened: settingsPane.refreshKeywordSettings()
 
         Settings {
+            id: settingsPane
             implicitWidth: 480
             implicitHeight: 560
             onClosed: settingsSheet.close()
@@ -304,6 +306,7 @@ Kirigami.ApplicationWindow {
 
             // ---- list column --------------------------------------------
             Rectangle {
+                Layout.fillWidth: root.detailCollapsed
                 Layout.preferredWidth: 340
                 Layout.fillHeight: true
                 color: Theme.bg
