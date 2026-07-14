@@ -332,6 +332,21 @@ Item {
             Layout.preferredHeight: 360
             backgroundColor: Theme.bg
 
+            // Email body HTML is untrusted content -- it comes from whatever
+            // sender wrote the message, not from this app or the paired
+            // relay server. Two settings changed from WebEngineView's
+            // defaults to close the two classic mail-client HTML risks:
+            // running the sender's JavaScript, and auto-fetching remote
+            // <img> sources (a standard tracking-pixel/read-receipt leak --
+            // it would fire on every open even though the HTML itself is
+            // rendered via loadHtml(), since <img src="https://..."> is
+            // still a real network fetch regardless of the base content
+            // being local). Neither is needed for anything this view does
+            // (link clicks are already intercepted below via
+            // navigationRequested/openUrlExternally, not JS).
+            settings.javascriptEnabled: false
+            settings.autoLoadImages: false
+
             // Only a real user link click should escape to the system
             // browser -- the initial loadHtml() call above also produces a
             // navigationRequested event, but its navigationType is not
