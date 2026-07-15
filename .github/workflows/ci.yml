@@ -1,0 +1,160 @@
+# Task 51: CI (GitHub Actions).
+#
+# Single Qt6 build+test job, no matrix -- global constraint 1 (phase8-
+# global-constraints.md): Qt5/Ubuntu Touch/Clickable support was dropped
+# outright, so there is exactly one build path to verify here.
+#
+# --- Why this isn't a plain `apt-get install` against stock ubuntu-24.04 ---
+#
+# The task brief's step 2 assumes KF6 dev packages (libkf6kirigami2-dev,
+# libkf6notifications-dev, libkf6dbusaddons-dev, libkf6i18n-dev) are
+# available straight from Ubuntu 24.04 "noble"'s own archives. Verified
+# directly against packages.ubuntu.com (2026-07-15) that none of the four
+# exist for the noble suite at all (not even in universe) -- confirmed via
+# https://packages.ubuntu.com/search?keywords=<pkg>&searchon=names&suite=noble
+# returning "Sorry, your search gave no results" for each. qt6keychain-dev
+# (as named in the brief) doesn't exist under that name on any Ubuntu suite
+# either. Cross-checked the Kubuntu Backports PPA
+# (https://launchpad.net/~kubuntu-ppa/+archive/ubuntu/backports), which does
+# carry kf6-kirigami/kf6-knotifications/etc. packages -- but its package
+# listing is published for "questing" (25.10) and "jammy" (22.04) only, with
+# no noble target, i.e. even Kubuntu's own KF6 backport effort skips 24.04.
+# KDE's own upstream CI (invent.kde.org/sysadmin/ci-images) builds KF6
+# software against a rolling openSUSE Tumbleweed image (suse-qt611/
+# suse-qt612), not any Ubuntu LTS, for the same underlying reason: noble
+# predates KF6's Feb-2024 stable packaging landing anywhere in Ubuntu's own
+# archives.
+#
+# What *does* carry current, noble-built KF6/Qt6 packages: KDE neon's own
+# "user" apt archive (https://archive.neon.kde.org/user), which targets
+# `noble` directly (confirmed: archive.neon.kde.org/user/dists/noble/ exists
+# and is actively updated) because neon layers current KDE software on top
+# of the current Ubuntu LTS by design. Fetched and inspected its Packages
+# index directly (archive.neon.kde.org/user/dists/noble/main/binary-amd64/
+# Packages.gz) and confirmed every package this project's CMakeLists.txt
+# actually needs is present there for noble: extra-cmake-modules,
+# qt6-base-dev (bundles Core/Network/Sql/Test/DBus -- confirmed no separate
+# -dev split package exists for those submodules), qt6-declarative-dev
+# (bundles Qml/Quick/QuickControls2), qt6-webengine-dev,
+# libqt6sql6-sqlite (runtime SQLite driver plugin the DAO tests open a real
+# database through), libkf6kirigami2-dev, libkf6notifications-dev,
+# libkf6dbusaddons-dev, libkf6i18n-dev, kunifiedpush-dev, and -- under a
+# different name than the brief guessed -- qtkeychain-qt6-dev (Qt6Keychain
+# 0.16.0 in this archive as of this check; the Flatpak manifate
+# `packaging/flatpak/com.urlxl.LlamaMail.json` separately pins 0.17.0 for
+# its from-source build, a different mechanism for a different
+# distribution channel -- 0.16 vs 0.17 is not an ABI/API-breaking gap for
+# the calls SecureStoreKeychain.cpp makes).
+#
+# This job therefore adds neon's "user" archive on top of the stock
+# ubuntu-24.04 runner image (its own main/universe repos stay enabled and
+# still supply the non-KDE build dependencies) rather than switching to a
+# container: block on a KDE-maintained image -- no Ubuntu-24.04-based
+# KDE CI container was found to exist (KDE's Docker Hub `kdeorg/ci-*`
+# images are 2-3 years stale, Qt 6.4/6.5, openSUSE-based, last published
+# 2023; invent.kde.org's current sysadmin/ci-images `suse-qt611`/
+# `suse-qt612` are openSUSE Tumbleweed-based, and its one Ubuntu-family
+# image, `kubuntu-resolute-lts`, targets 25.10 "Resolute" and is a VM
+# image, not a pullable container). Layering neon's real, noble-targeted
+# apt archive keeps this job an honest, plain `apt-get install` flow -- just
+# with one extra repository added first -- rather than fabricating package
+# names against noble's own archives or guessing at a container tag.
+#
+# Residual uncertainty (this could only be fully confirmed by an actual run,
+# see task-51-report.md): whether apt dependency resolution across the
+# combined ubuntu-24.04 + neon archives resolves cleanly end-to-end on a
+# fresh GitHub-hosted runner (neon's qt6-base-dev carries `Breaks/Replaces`
+# against older stock Qt6 packages, which is standard for how neon users
+# upgrade, but this project has never exercised that combination inside
+# GitHub's specific runner image before); and whether every -dev package's
+# CMake config target name lines up 1:1 with what this project's
+# CMakeLists.txt calls (e.g. `find_package(KUnifiedPush REQUIRED)`,
+# `find_package(Qt6Keychain REQUIRED)`) -- highly likely since these are the
+# same upstream projects' own CMake exports repackaged, not KDE/neon
+# inventions, but not something inspecting a Packages index can prove.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # Layer KDE neon's "user" apt archive on top of the stock noble repos
+      # -- see the file-level comment above for why this is necessary (no
+      # KF6 packages exist in Ubuntu 24.04's own archives at all).
+      - name: Add KDE neon apt archive (KF6/Qt6 packages for noble)
+        run: |
+          sudo install -d -m 0755 /etc/apt/keyrings
+          curl -fsSL https://archive.neon.kde.org/public.key | sudo gpg --dearmor -o /etc/apt/keyrings/neon-archive.gpg
+          echo "deb [signed-by=/etc/apt/keyrings/neon-archive.gpg] https://archive.neon.kde.org/user noble main" \
+            | sudo tee /etc/apt/sources.list.d/neon.list
+
+      # Full dependency list cross-checked against this repo's own
+      # CMakeLists.txt (root, app/, core/, tests/) -- see the file-level
+      # comment above for the per-package provenance/verification notes.
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake \
+            ninja-build \
+            extra-cmake-modules \
+            gettext \
+            qt6-base-dev \
+            qt6-declarative-dev \
+            qt6-webengine-dev \
+            libqt6sql6-sqlite \
+            libkf6kirigami2-dev \
+            libkf6notifications-dev \
+            libkf6dbusaddons-dev \
+            libkf6i18n-dev \
+            qtkeychain-qt6-dev \
+            kunifiedpush-dev
+
+      - name: Configure
+        run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build
+
+      # All test binaries use QTEST_APPLESS_MAIN/QTEST_GUILESS_MAIN (verified
+      # against tests/CMakeLists.txt and every tests/**/*Test.cpp -- none use
+      # QTEST_MAIN/a real QGuiApplication), so no Xvfb/offscreen QPA platform
+      # setup is needed here. SecureStoreKeychainTest and
+      # NotificationDispatcherTest are the two tests that touch D-Bus-backed
+      # system services (Secret Service, KNotification); both are already
+      # written to tolerate a session with no such service reachable
+      # (SecureStoreKeychainTest QSKIPs when the Secret Service write fails;
+      # NotificationDispatcherTest only exercises the pure
+      # pickTitle()/pickText() helpers, never notify() itself) -- consistent
+      # with global constraint 9 (no live backend, no local KDE Wallet/D-Bus
+      # session required).
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+# --- flatpak-builder validation job: deliberately omitted ---
+#
+# The task brief allows this as an optional second job "only if you can
+# keep it fast and secret-free... if flathub downloads make it too slow/
+# flaky for routine CI, skip it and note why in a comment, rather than
+# shipping a job that will flake on every PR." Skipping outright, for a
+# stronger reason than speed: `packaging/flatpak/com.urlxl.LlamaMail.json`
+# is currently *known* to fail deterministically, every single time, at the
+# `llamamail` module's CMake configure step -- documented in
+# task-47-report.md ("Could NOT find Qt6WebEngineQuick ... Failed to find
+# required Qt component 'WebEngineQuick'"), reproduced there against a
+# control build of the pre-existing manifest to prove it predates that
+# task's changes. The manifest's `modules` list has never included a
+# from-source Qt6WebEngine build, and app/CMakeLists.txt has required
+# WebEngineQuick unconditionally since Task 35. Until a future task adds
+# that (a large, separate undertaking -- see task-47-report.md), a
+# flatpak-builder job here would not flake occasionally, it would fail on
+# literally every push and every PR, which is strictly worse than not
+# having the job at all.
