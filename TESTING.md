@@ -214,7 +214,7 @@ default/bare User-Agent strings (see `AGENTS.md` Section 8).
       `cmake --build <builddir> && cmake --install <builddir>
       --prefix <some-prefix>` and inspect the installed tree:
   - `<prefix>/bin/llamamail` (the binary)
-  - `<prefix>/share/icons/hicolor/{16x16,22x22,24x24,32x32,48x48,128x128,256x256}/apps/com.urlxl.LlamaMail.png`
+  - `<prefix>/share/icons/hicolor/{16x16,22x22,24x24,32x32,48x48,64x64,128x128,256x256}/apps/com.urlxl.LlamaMail.png`
     and `.../scalable/apps/com.urlxl.LlamaMail.svg`
   - `<prefix>/share/applications/com.urlxl.LlamaMail.desktop`
   - `<prefix>/share/dbus-1/services/com.urlxl.LlamaMail.service`
@@ -247,8 +247,9 @@ default/bare User-Agent strings (see `AGENTS.md` Section 8).
 - [ ] **i18n fallback-to-English behaves correctly with no `.mo` catalogs
       installed.** Build and launch natively with no locale catalog
       installed anywhere on the system (the expected state right now —
-      zero `.po` files are populated, only the near-empty
-      `po/llamamail.pot` header exists). Expected: every `i18n()`/
+      zero `.po` files are populated; `po/llamamail.pot` is a fully
+      populated 114-msgid catalog per Task 49's sweep, but nothing has been
+      compiled into a `.mo` catalog yet). Expected: every `i18n()`/
       `i18nc()`-wrapped string (114 strings across QML pages/roots and 4
       C++ controllers, per Task 49's sweep) renders as its literal English
       source string, and the launch produces **no** "catalog not found" or
@@ -281,8 +282,8 @@ default/bare User-Agent strings (see `AGENTS.md` Section 8).
   distribution channel — do not describe it as building and running end
   to end until a from-source `qt6-webengine` module (or an updated
   WebEngine extension) closes this gap.
-- **No live E2E test infrastructure exists in CI.** Task 51 (not yet
-  done as of this checklist) sets up a stock GitHub Actions Ubuntu runner
+- **No live E2E test infrastructure exists in CI.** Task 51's
+  `.github/workflows/ci.yml` sets up a stock GitHub Actions Ubuntu runner
   that installs Qt6/KF6 via `apt` and runs `cmake --build` + `ctest` — it
   proves the app builds and its unit tests pass, nothing about pairing,
   push delivery, or MFA against the real backend. All of the live-backend

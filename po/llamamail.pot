@@ -17,518 +17,493 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: /home/yoshi/git/llama-Linux/po/../app/contacts/ContactsController.cpp:152
+#: app/contacts/ContactsController.cpp:152
 #, kde-format
 msgid "Synced -- %1 pushed, %2 applied"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/contacts/ContactsController.cpp:157
-#: /home/yoshi/git/llama-Linux/po/../app/mail/MailController.cpp:109
-#: /home/yoshi/git/llama-Linux/po/../app/pairing/MfaController.cpp:41
+#: app/contacts/ContactsController.cpp:157 app/mail/MailController.cpp:109
+#: app/pairing/MfaController.cpp:41
 #, kde-format
 msgid "Not paired"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/contacts/ContactsController.cpp:161
+#: app/contacts/ContactsController.cpp:161
 #, kde-format
 msgid "Unauthorized -- please re-pair this device"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/contacts/ContactsController.cpp:165
+#: app/contacts/ContactsController.cpp:165
 #, kde-format
 msgid "Service unavailable"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/contacts/ContactsController.cpp:169
+#: app/contacts/ContactsController.cpp:169
 #, kde-format
 msgid "Sync failed, try again"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/contacts/ContactsController.cpp:224
-#: /home/yoshi/git/llama-Linux/po/../app/contacts/ContactsController.cpp:247
+#: app/contacts/ContactsController.cpp:224
+#: app/contacts/ContactsController.cpp:247
 #, kde-format
 msgid "Name is required"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/contacts/ContactsController.cpp:253
+#: app/contacts/ContactsController.cpp:253
 #, kde-format
 msgid "Contact not found"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/mail/MailController.cpp:149
+#: app/mail/MailController.cpp:149
 #, kde-format
 msgid "Refresh failed"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/mail/MailController.cpp:172
+#: app/mail/MailController.cpp:172
 #, kde-format
 msgid "Action failed"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/mail/MailController.cpp:246
+#: app/mail/MailController.cpp:246
 #, kde-format
 msgid "Could not open attachment: %1"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/mail/MailController.cpp:252
+#: app/mail/MailController.cpp:252
 #, kde-format
 msgid "Attachments exceed the 25 MB limit"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/mail/MailController.cpp:268
+#: app/mail/MailController.cpp:268
 #, kde-format
 msgid "Send failed"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/mail/MailController.cpp:287
+#: app/mail/MailController.cpp:287
 #, kde-format
 msgid "Could not list attachments"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/mail/MailController.cpp:336
+#: app/mail/MailController.cpp:336
 #, kde-format
 msgid "Download failed"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/mail/MailController.cpp:361
+#: app/mail/MailController.cpp:361
 #, kde-format
 msgid "Could not write attachment to %1"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/pairing/MfaController.cpp:53
+#: app/pairing/MfaController.cpp:53
 #, kde-format
 msgid "Approved"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/pairing/MfaController.cpp:53
+#: app/pairing/MfaController.cpp:53
 #, kde-format
 msgid "Denied"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/pairing/MfaController.cpp:65
+#: app/pairing/MfaController.cpp:65
 #, kde-format
 msgid "This request was already resolved (%1)."
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/pairing/MfaController.cpp:68
+#: app/pairing/MfaController.cpp:68
 #, kde-format
 msgid "This request was already handled or denied."
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/pairing/MfaController.cpp:75
+#: app/pairing/MfaController.cpp:75
 #, kde-format
 msgid "Failed to send response, please try again."
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/pairing/PairingController.cpp:154
+#: app/pairing/PairingController.cpp:154
 #, kde-format
 msgid "This pairing link is invalid or incomplete."
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/pairing/PairingController.cpp:216
+#: app/pairing/PairingController.cpp:216
 #, kde-format
 msgid "This pairing link was rejected. Check the link and try again."
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/pairing/PairingController.cpp:219
+#: app/pairing/PairingController.cpp:219
 #, kde-format
 msgid "The server is not configured for pairing yet."
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/pairing/PairingController.cpp:223
+#: app/pairing/PairingController.cpp:223
 #, kde-format
 msgid "Pairing failed, please try again."
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/push/NotificationDispatcher.cpp:63
+#: app/push/NotificationDispatcher.cpp:63
 #, kde-format
 msgid "View"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/DesktopRoot.qml:237
+#: app/qml/DesktopRoot.qml:237
 msgid "Show Detail"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/DesktopRoot.qml:237
+#: app/qml/DesktopRoot.qml:237
 msgid "Hide Detail"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/DesktopRoot.qml:241
-#: /home/yoshi/git/llama-Linux/po/../app/qml/MobileRoot.qml:217
-#: /home/yoshi/git/llama-Linux/po/../app/qml/MobileRoot.qml:344
+#: app/qml/DesktopRoot.qml:241 app/qml/MobileRoot.qml:217
+#: app/qml/MobileRoot.qml:344
 msgid "Compose"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/DesktopRoot.qml:245
-#: /home/yoshi/git/llama-Linux/po/../app/qml/MobileRoot.qml:288
-#: /home/yoshi/git/llama-Linux/po/../app/qml/MobileRoot.qml:306
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Settings.qml:79
+#: app/qml/DesktopRoot.qml:245 app/qml/MobileRoot.qml:288
+#: app/qml/MobileRoot.qml:306 app/qml/pages/Settings.qml:79
 msgid "Settings"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/DesktopRoot.qml:279
+#: app/qml/DesktopRoot.qml:279
 msgid "Mail"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/DesktopRoot.qml:311
+#: app/qml/DesktopRoot.qml:311
 msgid "People"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/DesktopRoot.qml:325
-#: /home/yoshi/git/llama-Linux/po/../app/qml/MobileRoot.qml:237
-#: /home/yoshi/git/llama-Linux/po/../app/qml/MobileRoot.qml:350
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactsList.qml:62
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Settings.qml:52
+#: app/qml/DesktopRoot.qml:325 app/qml/MobileRoot.qml:237
+#: app/qml/MobileRoot.qml:350 app/qml/pages/ContactsList.qml:62
+#: app/qml/pages/Settings.qml:52
 msgid "Contacts"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/DesktopRoot.qml:385
-#: /home/yoshi/git/llama-Linux/po/../app/qml/MobileRoot.qml:427
+#: app/qml/DesktopRoot.qml:385 app/qml/MobileRoot.qml:427
 msgid "Refresh"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/DesktopRoot.qml:405
-#: /home/yoshi/git/llama-Linux/po/../app/qml/MobileRoot.qml:499
+#: app/qml/DesktopRoot.qml:405 app/qml/MobileRoot.qml:499
 msgid "No emails yet — tap Refresh."
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/DesktopRoot.qml:499
-#: /home/yoshi/git/llama-Linux/po/../app/qml/MobileRoot.qml:599
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:284
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/EmailDetail.qml:318
+#: app/qml/DesktopRoot.qml:499 app/qml/MobileRoot.qml:599
+#: app/qml/pages/ContactDetail.qml:284 app/qml/pages/EmailDetail.qml:318
 msgid "Delete"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/DesktopRoot.qml:537
+#: app/qml/DesktopRoot.qml:537
 msgid "Select an email"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/DesktopRoot.qml:537
+#: app/qml/DesktopRoot.qml:537
 msgid "Select a contact"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/MobileRoot.qml:189
+#: app/qml/MobileRoot.qml:189
 msgctxt "page title for viewing a single email message"
 msgid "Email"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/MobileRoot.qml:253
+#: app/qml/MobileRoot.qml:253
 msgid "Contact"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/MobileRoot.qml:269
-#: /home/yoshi/git/llama-Linux/po/../app/qml/MobileRoot.qml:302
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Pairing.qml:63
+#: app/qml/MobileRoot.qml:269 app/qml/MobileRoot.qml:302
+#: app/qml/pages/Pairing.qml:63
 msgid "Pair Device"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/MobileRoot.qml:338
-#: /home/yoshi/git/llama-Linux/po/../app/qml/MobileRoot.qml:361
+#: app/qml/MobileRoot.qml:338 app/qml/MobileRoot.qml:361
 msgid "Inbox"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/MobileRoot.qml:416
+#: app/qml/MobileRoot.qml:416
 msgid "Folder: %1"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/MobileRoot.qml:465
+#: app/qml/MobileRoot.qml:465
 msgid "All"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/MobileRoot.qml:476
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/EmailDetail.qml:392
+#: app/qml/MobileRoot.qml:476 app/qml/pages/EmailDetail.qml:392
 msgid "%1 (%2)"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/MobileRoot.qml:643
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/EmailDetail.qml:302
+#: app/qml/MobileRoot.qml:643 app/qml/pages/EmailDetail.qml:302
 msgid "Archive"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Compose.qml:42
+#: app/qml/pages/Compose.qml:42
 msgid "Please fill in all fields"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Compose.qml:77
+#: app/qml/pages/Compose.qml:77
 msgid "To"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Compose.qml:82
+#: app/qml/pages/Compose.qml:82
 msgid "Cc"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Compose.qml:87
+#: app/qml/pages/Compose.qml:87
 msgid "Bcc"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Compose.qml:92
+#: app/qml/pages/Compose.qml:92
 msgid "Subject"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Compose.qml:130
+#: app/qml/pages/Compose.qml:130
 msgid "Write your message…"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Compose.qml:140
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Compose.qml:223
+#: app/qml/pages/Compose.qml:140 app/qml/pages/Compose.qml:223
 msgid "Attach files"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Compose.qml:207
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/MfaApproval.qml:110
+#: app/qml/pages/Compose.qml:207 app/qml/pages/MfaApproval.qml:110
 msgid "Sending…"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Compose.qml:214
+#: app/qml/pages/Compose.qml:214
 msgid "Send"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:82
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:316
+#: app/qml/pages/ContactDetail.qml:82 app/qml/pages/ContactDetail.qml:316
 msgctxt "contact detail field label, the person's email address"
 msgid "Email"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:83
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:321
+#: app/qml/pages/ContactDetail.qml:83 app/qml/pages/ContactDetail.qml:321
 msgid "Phone"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:84
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:311
+#: app/qml/pages/ContactDetail.qml:84 app/qml/pages/ContactDetail.qml:311
 msgid "Org"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:85
+#: app/qml/pages/ContactDetail.qml:85
 msgid "Notes"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:235
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactsList.qml:136
+#: app/qml/pages/ContactDetail.qml:235 app/qml/pages/ContactsList.qml:136
 msgid "Unnamed"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:244
+#: app/qml/pages/ContactDetail.qml:244
 msgid "Synced"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:244
+#: app/qml/pages/ContactDetail.qml:244
 msgid "Local"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:280
+#: app/qml/pages/ContactDetail.qml:280
 msgid "Edit"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:300
+#: app/qml/pages/ContactDetail.qml:300
 msgid "Add contact"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:300
+#: app/qml/pages/ContactDetail.qml:300
 msgid "Edit contact"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:306
+#: app/qml/pages/ContactDetail.qml:306
 msgid "Name"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:353
+#: app/qml/pages/ContactDetail.qml:353
 msgid "Notes…"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:373
+#: app/qml/pages/ContactDetail.qml:373
 msgid "Cancel"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:378
+#: app/qml/pages/ContactDetail.qml:378
 msgid "Save"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactsList.qml:69
+#: app/qml/pages/ContactsList.qml:69
 msgid "Add"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactsList.qml:73
+#: app/qml/pages/ContactsList.qml:73
 msgid "Sync"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactsList.qml:97
+#: app/qml/pages/ContactsList.qml:97
 msgid "No contacts yet — sync or add one."
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/EmailDetail.qml:117
+#: app/qml/pages/EmailDetail.qml:117
 msgid "%1 B"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/EmailDetail.qml:119
+#: app/qml/pages/EmailDetail.qml:119
 msgid "%1 KB"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/EmailDetail.qml:120
+#: app/qml/pages/EmailDetail.qml:120
 msgid "%1 MB"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/EmailDetail.qml:259
+#: app/qml/pages/EmailDetail.qml:259
 msgid "Reply"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/EmailDetail.qml:264
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/EmailDetail.qml:285
+#: app/qml/pages/EmailDetail.qml:264 app/qml/pages/EmailDetail.qml:285
 msgid "%1 wrote:"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/EmailDetail.qml:269
+#: app/qml/pages/EmailDetail.qml:269
 msgid "Reply All"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/EmailDetail.qml:290
+#: app/qml/pages/EmailDetail.qml:290
 msgid "Forward"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/EmailDetail.qml:294
+#: app/qml/pages/EmailDetail.qml:294
 msgid "---------- Forwarded message ----------"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/EmailDetail.qml:295
+#: app/qml/pages/EmailDetail.qml:295
 msgid "From: %1"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/EmailDetail.qml:296
+#: app/qml/pages/EmailDetail.qml:296
 msgid "Subject: %1"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/EmailDetail.qml:310
+#: app/qml/pages/EmailDetail.qml:310
 msgid "Junk"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/EmailDetail.qml:370
+#: app/qml/pages/EmailDetail.qml:370
 msgid "Attachments"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/EmailDetail.qml:403
+#: app/qml/pages/EmailDetail.qml:403
 msgid "Saved to Downloads"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/MfaApproval.qml:43
+#: app/qml/pages/MfaApproval.qml:43
 msgid "Sign-in request"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/MfaApproval.qml:52
+#: app/qml/pages/MfaApproval.qml:52
 msgid "A sign-in is waiting for approval from this device."
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/MfaApproval.qml:88
+#: app/qml/pages/MfaApproval.qml:88
 msgid "Deny"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/MfaApproval.qml:92
+#: app/qml/pages/MfaApproval.qml:92
 msgid "Approve"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/MfaApproval.qml:147
+#: app/qml/pages/MfaApproval.qml:147
 msgid "Close"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/MfaApproval.qml:177
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Pairing.qml:218
+#: app/qml/pages/MfaApproval.qml:177 app/qml/pages/Pairing.qml:218
 msgid "Try Again"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Pairing.qml:72
+#: app/qml/pages/Pairing.qml:72
 msgid "Open a pairing link from the web app, or paste it below."
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Pairing.qml:93
+#: app/qml/pages/Pairing.qml:93
 msgid "Pair"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Pairing.qml:111
+#: app/qml/pages/Pairing.qml:111
 msgid "Pairing…"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Pairing.qml:134
+#: app/qml/pages/Pairing.qml:134
 msgid "Device paired"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Pairing.qml:148
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Settings.qml:144
+#: app/qml/pages/Pairing.qml:148 app/qml/pages/Settings.qml:144
 msgid "Server"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Pairing.qml:161
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Settings.qml:157
+#: app/qml/pages/Pairing.qml:161 app/qml/pages/Settings.qml:157
 msgid "Device"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Pairing.qml:174
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Settings.qml:86
+#: app/qml/pages/Pairing.qml:174 app/qml/pages/Settings.qml:86
 msgid "Done"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Pairing.qml:194
+#: app/qml/pages/Pairing.qml:194
 msgid "Pairing failed"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Settings.qml:52
+#: app/qml/pages/Settings.qml:52
 msgid "Connection"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Settings.qml:52
+#: app/qml/pages/Settings.qml:52
 msgid "Appearance"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Settings.qml:52
+#: app/qml/pages/Settings.qml:52
 msgid "Keywords"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Settings.qml:52
+#: app/qml/pages/Settings.qml:52
 msgid "Notifications"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Settings.qml:131
+#: app/qml/pages/Settings.qml:131
 msgid "Paired"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Settings.qml:179
+#: app/qml/pages/Settings.qml:179
 msgid "Pair This Device…"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Settings.qml:184
+#: app/qml/pages/Settings.qml:184
 msgid "Remove Pairing"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Settings.qml:258
+#: app/qml/pages/Settings.qml:258
 msgid "No keywords yet."
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Settings.qml:281
+#: app/qml/pages/Settings.qml:281
 msgid "Visible"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Settings.qml:281
+#: app/qml/pages/Settings.qml:281
 msgid "Hidden"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Settings.qml:307
+#: app/qml/pages/Settings.qml:307
 msgid "No sync yet."
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Settings.qml:319
+#: app/qml/pages/Settings.qml:319
 msgid "Sync Now"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Settings.qml:342
+#: app/qml/pages/Settings.qml:342
 msgid "Not yet registered"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Settings.qml:356
+#: app/qml/pages/Settings.qml:356
 msgid "Delivery Mode"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Settings.qml:368
+#: app/qml/pages/Settings.qml:368
 msgid "Transport"
 msgstr ""
 
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Settings.qml:382
+#: app/qml/pages/Settings.qml:382
 msgid "Push Server"
 msgstr ""

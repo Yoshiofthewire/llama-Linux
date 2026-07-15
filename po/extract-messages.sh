@@ -41,11 +41,18 @@ set -eu
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 po_dir="$script_dir"
-app_dir="$po_dir/../app"
+repo_root="$po_dir/.."
 pot_file="$po_dir/llamamail.pot"
 
-cpp_files=$(find "$app_dir" -name '*.cpp' | sort)
-qml_files=$(find "$app_dir/qml" -name '*.qml' | sort)
+# cd to the repo root and build relative paths from there so xgettext's
+# "#: " reference comments in the .pot are relative (e.g. app/qml/pages/
+# Inbox.qml) instead of embedding this machine's absolute checkout path --
+# otherwise every regeneration on a different checkout/user produces a
+# spurious diff.
+cd -- "$repo_root"
+
+cpp_files=$(find app -name '*.cpp' | sort)
+qml_files=$(find app/qml -name '*.qml' | sort)
 
 keywords="-ki18n:1 -ki18nc:1c,2 -ki18np:1,2 -ki18ncp:1c,2,3 -kxi18n:1 -kxi18nc:1c,2 -kxi18np:1,2 -kxi18ncp:1c,2,3"
 
