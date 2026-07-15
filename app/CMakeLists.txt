@@ -131,6 +131,22 @@ target_sources(llamamail PRIVATE
 find_package(KF6DBusAddons REQUIRED)
 target_link_libraries(llamamail PRIVATE KF6::DBusAddons)
 
+# KI18n (Task 48): i18n()/i18nc() translation-catalog infrastructure.
+# KF6::I18n is found once at the top level (same split as KF6::Kirigami) and
+# provides the C++ i18n()/i18nc()/KLocalizedString::setApplicationDomain()
+# API main.cpp uses. KF6::I18nQml (exported by that same find_package(KF6I18n)
+# call -- confirmed via KF6I18nTargets.cmake, no second find_package needed)
+# provides KLocalization::setupLocalizedContext(), which installs a
+# KLocalizedQmlContext as the QQmlApplicationEngine's root context object so
+# the same i18n()/i18nc() functions are callable from QML with no `import`
+# statement (klocalizedqmlcontext.h: "the i18n functions are also available
+# on the root context without KI18n.* prefix"). Deliberately NOT the older
+# KLocalizedContext class -- confirmed deprecated since 6.8 on this 6.27.0
+# install (klocalizedcontext.h: KI18N_DEPRECATED_VERSION(6, 8, "use
+# KLocalizedQmlContext or KLocalization::setupLocalizedContext() from
+# KF6::I18nQml instead")); see main.cpp for the actual wiring.
+target_link_libraries(llamamail PRIVATE KF6::I18n KF6::I18nQml)
+
 include(GNUInstallDirs)
 install(TARGETS llamamail RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 

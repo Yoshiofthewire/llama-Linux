@@ -45,6 +45,8 @@
 #include <QUrl>
 
 #include <KDBusService>
+#include <KLocalizedQmlContext>
+#include <KLocalizedString>
 
 // Task 28: every bundled font file (see app/resources/fonts.qrc) loaded via
 // QFontDatabase::addApplicationFont before the QQmlApplicationEngine is
@@ -145,6 +147,21 @@ int main(int argc, char* argv[])
     // advertises to the D-Bus daemon for on-demand activation.
     app.setApplicationName(QStringLiteral("LlamaMail"));
     app.setOrganizationDomain(QStringLiteral("urlxl.com"));
+
+    // Task 48: KI18n translation domain. Per KLocalizedString::
+    // setApplicationDomain()'s own doc comment ("This function should be
+    // called right after creating the instance of QCoreApplication or one of
+    // its subclasses"), so it runs before anything below can call i18n()/
+    // i18nc() (KLocalizedContext registration further down, deep-link
+    // routing, etc.). "llamamail" matches po/llamamail.pot's catalog name
+    // (po/CMakeLists.txt's ki18n_install()/po/extract-messages.sh) and the
+    // .mo filename that will be installed at
+    // share/locale/<lang>/LC_MESSAGES/llamamail.mo once Task 49 lands real
+    // .po files -- there are none yet (phase8-global-constraints.md item 5),
+    // so every i18n() call falls back to its literal source-code English
+    // text right now, which is the correct, expected behavior for this
+    // phase.
+    KLocalizedString::setApplicationDomain("llamamail");
 
     // KDBusService (KF6DBusAddons, confirmed installed via `pacman -Qs
     // kdbusaddons`) claims the well-known bus name in Unique mode. Verified
@@ -437,6 +454,22 @@ int main(int argc, char* argv[])
         "com.urlxl.LlamaMail", 1, 0, "Mfa", &mfaController);
 
     QQmlApplicationEngine engine;
+
+    // Task 48: makes i18n()/i18nc()/i18np()/i18ncp() (and their xi18n* KUIT
+    // counterparts) callable from every QML file loaded by this engine, with
+    // no `import` statement needed -- KLocalization::setupLocalizedContext()
+    // (KF6::I18nQml) constructs a KLocalizedQmlContext and installs it as
+    // engine.rootContext()'s context object, then also sets it as that
+    // context's own QQmlEngine (via QQmlEngine::setContextForObject(),
+    // internally) so property bindings using these functions re-evaluate on
+    // a runtime language change. Must run before engine.load() below --
+    // QML resolves i18n() through the root context at parse/binding time,
+    // so a context object set afterwards would be too late for
+    // MobileRoot.qml's very first frame. Deliberately not the older
+    // KLocalizedContext class (see app/CMakeLists.txt's KF6::I18nQml comment
+    // for why: deprecated since 6.8, this is its replacement).
+    KLocalization::setupLocalizedContext(&engine);
+
     engine.load(QUrl(QStringLiteral("qrc:/qml/MobileRoot.qml")));
     if (engine.rootObjects().isEmpty())
         return -1;

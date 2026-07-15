@@ -13,7 +13,15 @@ endif()
 find_package(Qt6 6.4 REQUIRED COMPONENTS Core Network Sql Quick Qml QuickControls2 Test)
 find_package(KF6Kirigami REQUIRED)
 
+# Task 48: KI18n translation infrastructure. Found once here, same split as
+# KF6Kirigami above -- app/CMakeLists.txt links KF6::I18n/KF6::I18nQml
+# without a second find_package call, and po/CMakeLists.txt's ki18n_install()
+# call relies on KF6I18nMacros.cmake, which KF6I18nConfig.cmake includes
+# automatically as part of this find_package().
+find_package(KF6I18n REQUIRED)
+
 add_subdirectory(core)
 add_subdirectory(app)
+add_subdirectory(po)
 enable_testing()
 add_subdirectory(tests)
