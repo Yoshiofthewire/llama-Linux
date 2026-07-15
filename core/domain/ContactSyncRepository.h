@@ -1,9 +1,11 @@
 #pragma once
 
+#include "domain/ContactSyncReconciliation.h"
 #include "models/Contact.h"
 
 #include <QString>
 #include <QVector>
+#include <optional>
 
 class ContactSyncClient;
 class ContactDao;
@@ -27,6 +29,12 @@ struct ContactSyncOutcome
     ContactSyncStatus status = ContactSyncStatus::Retry;
     ContactSyncSummary summary; // meaningful only when status == Success
     QString detail;             // meaningful when status != Success
+
+    // Temp-uid -> real-uid pairs from this sync()'s reconciliation pass,
+    // for callers (e.g. a native-contact link table) that must repoint
+    // references away from a temp uid that's now dead in the local cache.
+    // Empty on any early-return path (NotPaired, network error, tooOld).
+    QVector<ContactReconciliationAssignment> uidReassignments;
 };
 
 // Sits between ContactSyncClient and ContactDao/PendingContactChangeDao,
@@ -45,6 +53,8 @@ public:
                            PairingStore& pairingStore);
 
     QVector<Contact> contacts() const; // contactDao.findAll()
+
+    std::optional<Contact> findByUid(const QString& uid) const; // contactDao.findById()
 
     // Assigns a temp local uid (QUuid::createUuid().toString(QUuid::
     // WithoutBraces)), caches it under that uid immediately, and enqueues a

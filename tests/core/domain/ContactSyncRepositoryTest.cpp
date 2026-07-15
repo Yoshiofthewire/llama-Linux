@@ -30,6 +30,8 @@ private slots:
     void unsyncedLocalDeleteLeavesNoTombstone();
     void serverEditUpdatesExistingContact();
     void tooOldResetsCursorAndCache();
+    void findByUidReturnsContactWhenPresent();
+    void findByUidReturnsNulloptWhenAbsent();
 
 private:
     static void savePairing(PairingStore& pairingStore, quint16 port);
@@ -126,6 +128,13 @@ void ContactSyncRepositoryTest::fullSyncAssignsUidWithoutDuplicating()
     QCOMPARE(all.at(0).uid, QStringLiteral("srv-ada"));
     QVERIFY(pendingDao.findAll().isEmpty());
     QCOMPARE(cursorStore.contactBaseCursor(), QStringLiteral("456"));
+
+    // The temp uid assigned by queueCreate() is dead once reconciliation
+    // deletes its cache row -- callers (e.g. a native-contact link table)
+    // need this pair to repoint themselves at the real server uid.
+    QCOMPARE(outcome.uidReassignments.size(), 1);
+    QCOMPARE(outcome.uidReassignments.at(0).localUid, tempUid);
+    QCOMPARE(outcome.uidReassignments.at(0).serverUid, QStringLiteral("srv-ada"));
 }
 
 void ContactSyncRepositoryTest::serverDeleteRemovesLocalContactViaPull()
@@ -346,6 +355,63 @@ void ContactSyncRepositoryTest::tooOldResetsCursorAndCache()
     // Proves CursorStore::reset() was correctly not used -- a contacts-only
     // tooOld response has nothing to do with mail sync.
     QCOMPARE(cursorStore.mailCursor(), QStringLiteral("12345"));
+}
+
+void ContactSyncRepositoryTest::findByUidReturnsContactWhenPresent()
+{
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    Contact existing;
+    existing.uid = QStringLiteral("srv-1");
+    existing.fn = QStringLiteral("Grace");
+    QVERIFY(contactDao.insertOrReplace(existing));
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+
+    const std::optional<Contact> found = repository.findByUid(QStringLiteral("srv-1"));
+    QVERIFY(found.has_value());
+    QCOMPARE(*found->fn, QStringLiteral("Grace"));
+}
+
+void ContactSyncRepositoryTest::findByUidReturnsNulloptWhenAbsent()
+{
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+
+    QVERIFY(!repository.findByUid(QStringLiteral("does-not-exist")).has_value());
 }
 
 QTEST_GUILESS_MAIN(ContactSyncRepositoryTest)

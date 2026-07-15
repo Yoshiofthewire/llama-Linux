@@ -100,6 +100,11 @@ QVector<Contact> ContactSyncRepository::contacts() const
     return m_contactDao.findAll();
 }
 
+std::optional<Contact> ContactSyncRepository::findByUid(const QString& uid) const
+{
+    return m_contactDao.findById(uid);
+}
+
 QString ContactSyncRepository::queueCreate(Contact contact)
 {
     const QString tempUid = QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -226,5 +231,6 @@ ContactSyncOutcome ContactSyncRepository::sync()
 
     return { ContactSyncStatus::Success,
              ContactSyncSummary{ static_cast<int>(pending.size()), applied, result.cursor },
-             QString() };
+             QString(),
+             assignments };
 }
