@@ -60,6 +60,20 @@ target_sources(llamamail PRIVATE
   contacts/ContactsController.h
 )
 
+# NativeContactSyncRepository (Task 6) orchestrates one native-contacts
+# backend's sync pass against NativeContactsProvider (app/contacts/native/,
+# header-only interface -- no .cpp of its own, so not listed as a source
+# here) plus core/domain's ContactSyncRepository and core/db's
+# NativeContactLinkDao. Lives in app/, not llamacore, because the interface
+# it depends on will need QtDBus/Akonadi types (Tasks 7-8) that core/ must
+# never depend on -- same core/ boundary rule as ContactsController above.
+# No extra find_package needed: QCryptographicHash/QDateTime/QHash are
+# already part of Qt6::Core, transitively available via Qt6::Quick.
+target_sources(llamamail PRIVATE
+  contacts/native/NativeContactSyncRepository.cpp
+  contacts/native/NativeContactSyncRepository.h
+)
+
 # PairingController/MfaController (Task 34) wrap core/domain's
 # DeviceRegistrationService/PairingStore and core/net's MfaResponseClient as
 # QML singletons ("Pairing"/"Mfa") -- QObject/QUrl parsing, so app/ per the

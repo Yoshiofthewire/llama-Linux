@@ -111,6 +111,23 @@ target_include_directories(ContactsControllerTest PRIVATE ${CMAKE_SOURCE_DIR}/ap
 target_link_libraries(ContactsControllerTest PRIVATE llamacore Qt6::Test KF6::I18n)
 add_test(NAME ContactsControllerTest COMMAND ContactsControllerTest)
 
+# NativeContactSyncRepository (Task 6) lives in app/contacts/native/, not
+# llamacore -- same bespoke add_executable pattern as ContactsControllerTest
+# above. FakeNativeContactsProvider.h is header-only (test-side double for
+# NativeContactsProvider, itself header-only), so neither needs a source
+# file of its own here, just the include directory for both app/ and this
+# test's own directory (so "FakeNativeContactsProvider.h" resolves).
+add_executable(NativeContactSyncRepositoryTest
+  app/contacts/native/NativeContactSyncRepositoryTest.cpp
+  ${CMAKE_SOURCE_DIR}/app/contacts/native/NativeContactSyncRepository.cpp
+)
+target_include_directories(NativeContactSyncRepositoryTest PRIVATE
+  ${CMAKE_SOURCE_DIR}/app
+  ${CMAKE_CURRENT_SOURCE_DIR}/app/contacts/native
+)
+target_link_libraries(NativeContactSyncRepositoryTest PRIVATE llamacore Qt6::Test)
+add_test(NAME NativeContactSyncRepositoryTest COMMAND NativeContactSyncRepositoryTest)
+
 # PairingController/MfaController (Task 34) live in app/pairing/, not
 # llamacore -- same bespoke add_executable pattern as MailControllerTest/
 # ContactsControllerTest above.
