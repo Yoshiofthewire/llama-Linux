@@ -17,6 +17,8 @@ add_library(llamacore STATIC
   domain/KeywordRepository.h
   domain/ContactSyncReconciliation.cpp
   domain/ContactSyncReconciliation.h
+  domain/NativeContactReconciliation.cpp
+  domain/NativeContactReconciliation.h
   domain/ContactSyncRepository.cpp
   domain/ContactSyncRepository.h
   domain/PushRepository.cpp

@@ -31,6 +31,7 @@ llama_add_test(DeviceRegistrationServiceTest core/domain/DeviceRegistrationServi
 llama_add_test(MailRepositoryTest core/domain/MailRepositoryTest.cpp)
 llama_add_test(KeywordRepositoryTest core/domain/KeywordRepositoryTest.cpp)
 llama_add_test(ContactSyncReconciliationTest core/domain/ContactSyncReconciliationTest.cpp)
+llama_add_test(NativeContactReconciliationTest core/domain/NativeContactReconciliationTest.cpp)
 llama_add_test(ContactSyncRepositoryTest core/domain/ContactSyncRepositoryTest.cpp)
 llama_add_test(PushRepositoryTest core/domain/PushRepositoryTest.cpp)
 llama_add_test(TransportStateMachineTest core/domain/TransportStateMachineTest.cpp)
