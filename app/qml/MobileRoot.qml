@@ -186,7 +186,7 @@ Kirigami.ApplicationWindow {
         Kirigami.Page {
             id: emailDetailPage
             objectName: "emailDetailPage"
-            title: i18n("Email")
+            title: i18nc("page title for viewing a single email message", "Email")
             property string messageId: ""
             property string folder: ""
 

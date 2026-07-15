@@ -77,13 +77,14 @@ target_include_directories(EmailListModelTest PRIVATE ${CMAKE_SOURCE_DIR}/app)
 target_link_libraries(EmailListModelTest PRIVATE llamacore Qt6::Test)
 add_test(NAME EmailListModelTest COMMAND EmailListModelTest)
 
+find_package(KF6I18n REQUIRED)
 add_executable(MailControllerTest
   app/mail/MailControllerTest.cpp
   ${CMAKE_SOURCE_DIR}/app/mail/EmailListModel.cpp
   ${CMAKE_SOURCE_DIR}/app/mail/MailController.cpp
 )
 target_include_directories(MailControllerTest PRIVATE ${CMAKE_SOURCE_DIR}/app)
-target_link_libraries(MailControllerTest PRIVATE llamacore Qt6::Test)
+target_link_libraries(MailControllerTest PRIVATE llamacore Qt6::Test KF6::I18n)
 add_test(NAME MailControllerTest COMMAND MailControllerTest)
 
 # ContactListModel/ContactsController (Task 33) live in app/contacts/, not
@@ -103,7 +104,7 @@ add_executable(ContactsControllerTest
   ${CMAKE_SOURCE_DIR}/app/contacts/ContactsController.cpp
 )
 target_include_directories(ContactsControllerTest PRIVATE ${CMAKE_SOURCE_DIR}/app)
-target_link_libraries(ContactsControllerTest PRIVATE llamacore Qt6::Test)
+target_link_libraries(ContactsControllerTest PRIVATE llamacore Qt6::Test KF6::I18n)
 add_test(NAME ContactsControllerTest COMMAND ContactsControllerTest)
 
 # PairingController/MfaController (Task 34) live in app/pairing/, not
@@ -114,7 +115,7 @@ add_executable(PairingControllerTest
   ${CMAKE_SOURCE_DIR}/app/pairing/PairingController.cpp
 )
 target_include_directories(PairingControllerTest PRIVATE ${CMAKE_SOURCE_DIR}/app)
-target_link_libraries(PairingControllerTest PRIVATE llamacore Qt6::Test)
+target_link_libraries(PairingControllerTest PRIVATE llamacore Qt6::Test KF6::I18n)
 add_test(NAME PairingControllerTest COMMAND PairingControllerTest)
 
 add_executable(MfaControllerTest
@@ -122,7 +123,7 @@ add_executable(MfaControllerTest
   ${CMAKE_SOURCE_DIR}/app/pairing/MfaController.cpp
 )
 target_include_directories(MfaControllerTest PRIVATE ${CMAKE_SOURCE_DIR}/app)
-target_link_libraries(MfaControllerTest PRIVATE llamacore Qt6::Test)
+target_link_libraries(MfaControllerTest PRIVATE llamacore Qt6::Test KF6::I18n)
 add_test(NAME MfaControllerTest COMMAND MfaControllerTest)
 
 # PushPayloadParser (Task 40) lives in app/push/, not llamacore -- same
@@ -163,7 +164,7 @@ add_executable(NotificationDispatcherTest
   ${CMAKE_SOURCE_DIR}/app/push/NotificationDispatcher.cpp
 )
 target_include_directories(NotificationDispatcherTest PRIVATE ${CMAKE_SOURCE_DIR}/app)
-target_link_libraries(NotificationDispatcherTest PRIVATE llamacore KF6::Notifications Qt6::Test)
+target_link_libraries(NotificationDispatcherTest PRIVATE llamacore KF6::Notifications Qt6::Test KF6::I18n)
 add_test(NAME NotificationDispatcherTest COMMAND NotificationDispatcherTest)
 
 # NtfyTopicProvisioner (Task 43 review-finding fix): generation/persistence

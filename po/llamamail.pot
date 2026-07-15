@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: llamamail\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-15 04:47-0400\n"
+"POT-Creation-Date: 2026-07-15 04:52-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -208,8 +208,7 @@ msgid "Select a contact"
 msgstr ""
 
 #: /home/yoshi/git/llama-Linux/po/../app/qml/MobileRoot.qml:189
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:82
-#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:316
+msgctxt "page title for viewing a single email message"
 msgid "Email"
 msgstr ""
 
@@ -282,6 +281,12 @@ msgstr ""
 
 #: /home/yoshi/git/llama-Linux/po/../app/qml/pages/Compose.qml:214
 msgid "Send"
+msgstr ""
+
+#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:82
+#: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:316
+msgctxt "contact detail field label, the person's email address"
+msgid "Email"
 msgstr ""
 
 #: /home/yoshi/git/llama-Linux/po/../app/qml/pages/ContactDetail.qml:83

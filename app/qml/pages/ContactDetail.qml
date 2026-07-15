@@ -79,7 +79,7 @@ Item {
     // Email/Phone/Org/Notes order. A Repeater over this avoids writing the
     // same RowLayout{SectionLabel+Text} block out four times by hand.
     readonly property var detailRows: [
-        { label: i18n("Email"), value: (root.contact.emails && root.contact.emails.length > 0) ? root.contact.emails[0].value : "" },
+        { label: i18nc("contact detail field label, the person's email address", "Email"), value: (root.contact.emails && root.contact.emails.length > 0) ? root.contact.emails[0].value : "" },
         { label: i18n("Phone"), value: (root.contact.phones && root.contact.phones.length > 0) ? root.contact.phones[0].value : "" },
         { label: i18n("Org"), value: root.contact.org || "" },
         { label: i18n("Notes"), value: root.contact.notes || "" },
@@ -313,7 +313,7 @@ Item {
                 ThemedTextField {
                     id: emailField
                     Layout.fillWidth: true
-                    placeholderText: i18n("Email")
+                    placeholderText: i18nc("contact detail field label, the person's email address", "Email")
                 }
                 ThemedTextField {
                     id: phoneField
