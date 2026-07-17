@@ -168,13 +168,37 @@ void appendTextProperty(QStringList& lines, const QString& name, const std::opti
     lines << foldLine(name + QLatin1Char(':') + escapeText(*value));
 }
 
+// Wraps a TYPE=/X-LABEL=/LABEL= parameter value in double quotes (the
+// RFC 6350 sec 5.1 QSTRING form) whenever it contains a delimiter (';',
+// ':', ',') that would otherwise be indistinguishable from content-line
+// structure -- e.g. a custom-field label of "a;b" would read back as two
+// separate parameters, and a service/label containing ':' would corrupt
+// the head/value split entirely. A literal '"' in the source value is
+// dropped rather than escaped: vCard 3.0's quoted-string has no escape
+// mechanism for an embedded DQUOTE (it is simply excluded from
+// QSAFE-CHAR), so there is no lossless way to preserve one -- silently
+// dropping it is preferable to corrupting the line or rejecting free-text
+// user input outright.
+QString quoteParamValueIfNeeded(const QString& rawValue)
+{
+    QString value = rawValue;
+    value.remove(QLatin1Char('"'));
+    if (value.contains(QLatin1Char(';')) || value.contains(QLatin1Char(':')) || value.contains(QLatin1Char(',')))
+        return QLatin1Char('"') + value + QLatin1Char('"');
+    return value;
+}
+
 // EMAIL/TEL/ADR share this TYPE= handling: on write, a present label is
 // uppercased into a single TYPE= token; PREF is never synthesized here.
+// X-RELATED/X-ABDATE reuse the same helper for their (single-value, not a
+// real multi-type list) TYPE= param, so the quoting below covers those
+// too -- see quoteParamValueIfNeeded's doc comment for why it's needed at
+// all now that Task 5 made some of these labels user-typeable.
 QString typeParamForWrite(const std::optional<QString>& label)
 {
     if (!label || label->isEmpty())
         return QString();
-    return QStringLiteral(";TYPE=") + label->toUpper();
+    return QStringLiteral(";TYPE=") + quoteParamValueIfNeeded(label->toUpper());
 }
 
 // On read, take the first non-PREF token, lowercased -- multi-type
@@ -195,12 +219,43 @@ std::optional<QString> firstNonPrefTypeLower(const QStringList& tokens)
 
 // URL's non-standard X-LABEL parameter (websites) is free text, not a
 // restricted TYPE token set -- unlike typeParamForWrite, case is preserved
-// as-is on both write and read rather than upper/lowercased.
+// as-is on both write and read rather than upper/lowercased. Still routed
+// through quoteParamValueIfNeeded since free text can contain ';'/':'/','.
 QString xLabelParamForWrite(const std::optional<QString>& label)
 {
     if (!label || label->isEmpty())
         return QString();
-    return QStringLiteral(";X-LABEL=") + *label;
+    return QStringLiteral(";X-LABEL=") + quoteParamValueIfNeeded(*label);
+}
+
+// X-LLAMA-CUSTOM's LABEL parameter is the user-supplied custom-field name
+// -- same free-text quoting rule as xLabelParamForWrite, split into its
+// own helper since (unlike the others) a custom field always has a LABEL=
+// param, never an absent/omitted one.
+QString labelParamForWrite(const QString& label)
+{
+    return QStringLiteral(";LABEL=") + quoteParamValueIfNeeded(label);
+}
+
+// Sanitizes an IM service name into the safe token that a vCard property
+// name is restricted to (RFC 6350 sec 3.3's name = iana-token / x-name,
+// both ALPHA / DIGIT / "-" only): every other character -- including
+// spaces, ':', ';' -- is dropped rather than escaped, because unlike a
+// parameter value a property name has no quoting mechanism at all. So
+// "Google Talk" becomes "GOOGLETALK" and "a:b"/"a;b" can no longer break
+// content-line syntax by injecting a colon/semicolon into the property
+// name itself. If sanitizing drops every character, the caller falls back
+// to the plain (service-less) "X-IMPP" property, matching the existing
+// absent-service path rather than emitting a dangling "X-IMPP-".
+QString sanitizeImppServiceToken(const QString& service)
+{
+    QString out;
+    out.reserve(service.size());
+    for (const QChar ch : service) {
+        if (ch.unicode() < 128 && (ch.isLetterOrNumber() || ch == QLatin1Char('-')))
+            out += ch.toUpper();
+    }
+    return out;
 }
 
 struct ContentLine
@@ -214,12 +269,27 @@ struct ContentLine
 
 // Splits one already-unfolded logical line into property name, its TYPE=/
 // X-LABEL=/LABEL= parameters (the only parameters this converter needs),
-// and raw value. The first ':' always separates head from value because
-// property names/parameters never contain a literal colon.
+// and raw value. Both the head/value ':' and the inter-parameter ';' are
+// found by a quote-aware scan rather than plain indexOf/split: since
+// quoteParamValueIfNeeded() (write side) now wraps a param value in
+// double quotes whenever it contains ';'/':'/',', a naive first-colon or
+// blind semicolon-split would misparse those -- e.g. LABEL="a;b" must not
+// be split at the ';' inside the quotes.
 ContentLine parseContentLine(const QString& line)
 {
     ContentLine result;
-    const int colonIdx = line.indexOf(QLatin1Char(':'));
+
+    bool inQuotes = false;
+    int colonIdx = -1;
+    for (int i = 0; i < line.size(); ++i) {
+        const QChar ch = line.at(i);
+        if (ch == QLatin1Char('"'))
+            inQuotes = !inQuotes;
+        else if (ch == QLatin1Char(':') && !inQuotes) {
+            colonIdx = i;
+            break;
+        }
+    }
     if (colonIdx < 0) {
         result.name = line;
         return result;
@@ -228,7 +298,23 @@ ContentLine parseContentLine(const QString& line)
     const QString head = line.left(colonIdx);
     result.value = line.mid(colonIdx + 1);
 
-    const QStringList headParts = head.split(QLatin1Char(';'));
+    QStringList headParts;
+    {
+        QString current;
+        bool quoted = false;
+        for (const QChar ch : head) {
+            if (ch == QLatin1Char('"'))
+                quoted = !quoted;
+            if (ch == QLatin1Char(';') && !quoted) {
+                headParts << current;
+                current.clear();
+                continue;
+            }
+            current += ch;
+        }
+        headParts << current;
+    }
+
     result.name = headParts.isEmpty() ? QString() : headParts.first();
     for (int i = 1; i < headParts.size(); ++i) {
         const QString& param = headParts.at(i);
@@ -236,10 +322,18 @@ ContentLine parseContentLine(const QString& line)
         if (eq < 0)
             continue;
         const QString paramName = param.left(eq);
-        const QString paramValue = param.mid(eq + 1);
-        if (paramName.compare(QStringLiteral("TYPE"), Qt::CaseInsensitive) == 0)
-            result.typeTokens = paramValue.split(QLatin1Char(','));
-        else if (paramName.compare(QStringLiteral("X-LABEL"), Qt::CaseInsensitive) == 0)
+        const QString rawParamValue = param.mid(eq + 1);
+        const bool wasQuoted = rawParamValue.size() >= 2 && rawParamValue.startsWith(QLatin1Char('"'))
+            && rawParamValue.endsWith(QLatin1Char('"'));
+        const QString paramValue = wasQuoted ? rawParamValue.mid(1, rawParamValue.size() - 2) : rawParamValue;
+        if (paramName.compare(QStringLiteral("TYPE"), Qt::CaseInsensitive) == 0) {
+            // A quoted TYPE= value is one atomic (possibly comma-containing)
+            // token, not vCard's usual comma-separated multi-type list --
+            // quoting is only ever produced by typeParamForWrite() for the
+            // single-label X-RELATED/X-ABDATE/etc. case, so splitting it on
+            // ',' here would wrongly fragment a label like "a,b".
+            result.typeTokens = wasQuoted ? QStringList { paramValue } : paramValue.split(QLatin1Char(','));
+        } else if (paramName.compare(QStringLiteral("X-LABEL"), Qt::CaseInsensitive) == 0)
             result.xLabelParam = paramValue;
         else if (paramName.compare(QStringLiteral("LABEL"), Qt::CaseInsensitive) == 0)
             result.labelParam = paramValue;
@@ -358,9 +452,13 @@ QString contactToVCard(const Contact& contact)
     for (const ContactImEntry& im : contact.ims) {
         // X-IMPP-<SERVICE>: vCard 3.0 has no IMPP property (that's 4.0) --
         // unverified against a real KAddressBook/EDS export, re-check when
-        // Task 7/8 lands a real backend.
-        const QString serviceSuffix
-            = (im.service && !im.service->isEmpty()) ? QLatin1Char('-') + im.service->toUpper() : QString();
+        // Task 7/8 lands a real backend. service is user-typeable (Task 5's
+        // ContactDetail.qml), so it's run through sanitizeImppServiceToken
+        // before being spliced into the property name -- see that helper's
+        // doc comment for why dropping unsafe characters (not quoting) is
+        // the only option in property-name position.
+        const QString sanitizedService = im.service ? sanitizeImppServiceToken(*im.service) : QString();
+        const QString serviceSuffix = sanitizedService.isEmpty() ? QString() : QLatin1Char('-') + sanitizedService;
         lines << foldLine(QStringLiteral("X-IMPP") + serviceSuffix + typeParamForWrite(im.label) + QLatin1Char(':')
             + escapeText(im.value));
     }
@@ -390,8 +488,8 @@ QString contactToVCard(const Contact& contact)
         // X-LLAMA-CUSTOM: app-specific free-form fields have no vCard
         // concept at all -- unverified against a real KAddressBook/EDS
         // export, re-check when Task 7/8 lands a real backend.
-        lines << foldLine(
-            QStringLiteral("X-LLAMA-CUSTOM;LABEL=") + field.label + QLatin1Char(':') + escapeText(field.value));
+        lines << foldLine(QStringLiteral("X-LLAMA-CUSTOM") + labelParamForWrite(field.label) + QLatin1Char(':')
+            + escapeText(field.value));
     }
 
     if (!contact.groupIds.isEmpty()) {

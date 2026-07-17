@@ -34,6 +34,9 @@ private slots:
     void photoRefRoundTripsAsPlainTextProperty();
     void pronounsNeverWrittenAndRoundTripsAsAbsent();
     void absentNewFieldsProduceNoLinesAndDefaultOnRead();
+    void imServiceWithUnsafeCharactersIsSanitizedInPropertyName();
+    void websiteLabelContainingDelimitersRoundTripsViaQuotedParam();
+    void customFieldLabelContainingDelimitersRoundTripsViaQuotedParam();
 };
 
 void VCardContactTest::roundTripsEveryScalarField()
@@ -471,6 +474,65 @@ void VCardContactTest::absentNewFieldsProduceNoLinesAndDefaultOnRead()
     QVERIFY(roundTripped.customFields.isEmpty());
     QVERIFY(roundTripped.groupIds.isEmpty());
     QCOMPARE(roundTripped.photoRef, std::optional<QString>(std::nullopt));
+}
+
+void VCardContactTest::imServiceWithUnsafeCharactersIsSanitizedInPropertyName()
+{
+    Contact contact;
+    contact.ims
+        = { ContactImEntry{ QStringLiteral("Google Talk:1;2"), std::nullopt, QStringLiteral("ada@example.org") } };
+
+    const QString vcard = VCardContact::contactToVCard(contact);
+
+    QString imppLine;
+    for (const QString& line : vcard.split(QStringLiteral("\r\n"))) {
+        if (line.startsWith(QStringLiteral("X-IMPP-"))) {
+            imppLine = line;
+            break;
+        }
+    }
+    QVERIFY(!imppLine.isEmpty());
+    // Property name is sanitized down to [A-Z0-9-] only -- the raw
+    // service's space/colon/semicolon don't leak into the property name,
+    // and exactly one ':' separates property-spec from value (i.e. the
+    // line is still syntactically well-formed).
+    QCOMPARE(imppLine, QStringLiteral("X-IMPP-GOOGLETALK12:ada@example.org"));
+    QCOMPARE(imppLine.count(QLatin1Char(':')), 1);
+
+    const Contact roundTripped = VCardContact::contactFromVCard(vcard);
+    QCOMPARE(roundTripped.ims.size(), 1);
+    QCOMPARE(roundTripped.ims.first().service, std::optional<QString>(QStringLiteral("googletalk12")));
+    QCOMPARE(roundTripped.ims.first().value, QStringLiteral("ada@example.org"));
+}
+
+void VCardContactTest::websiteLabelContainingDelimitersRoundTripsViaQuotedParam()
+{
+    Contact contact;
+    contact.websites
+        = { ContactUrlEntry{ QStringLiteral("Work;Home:Other"), QStringLiteral("https://ada.example.com") } };
+
+    const QString vcard = VCardContact::contactToVCard(contact);
+    // A label containing ';'/':' is wrapped in double quotes so it can't be
+    // mistaken for a parameter/value boundary by the parser.
+    QVERIFY(vcard.contains(QStringLiteral("URL;X-LABEL=\"Work;Home:Other\":https://ada.example.com")));
+
+    const Contact roundTripped = VCardContact::contactFromVCard(vcard);
+    QCOMPARE(roundTripped.websites.size(), 1);
+    QCOMPARE(roundTripped.websites.first().label, contact.websites.first().label);
+    QCOMPARE(roundTripped.websites.first().value, contact.websites.first().value);
+}
+
+void VCardContactTest::customFieldLabelContainingDelimitersRoundTripsViaQuotedParam()
+{
+    Contact contact;
+    contact.customFields = { ContactCustomFieldEntry{ QStringLiteral("Cost,Center;Code"), QStringLiteral("42") } };
+
+    const QString vcard = VCardContact::contactToVCard(contact);
+    QVERIFY(vcard.contains(QStringLiteral("X-LLAMA-CUSTOM;LABEL=\"Cost,Center;Code\":42")));
+
+    const Contact roundTripped = VCardContact::contactFromVCard(vcard);
+    QCOMPARE(roundTripped.customFields.size(), 1);
+    QCOMPARE(roundTripped.customFields.first(), contact.customFields.first());
 }
 
 QTEST_GUILESS_MAIN(VCardContactTest)
