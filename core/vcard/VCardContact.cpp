@@ -193,17 +193,29 @@ std::optional<QString> firstNonPrefTypeLower(const QStringList& tokens)
     return std::nullopt;
 }
 
+// URL's non-standard X-LABEL parameter (websites) is free text, not a
+// restricted TYPE token set -- unlike typeParamForWrite, case is preserved
+// as-is on both write and read rather than upper/lowercased.
+QString xLabelParamForWrite(const std::optional<QString>& label)
+{
+    if (!label || label->isEmpty())
+        return QString();
+    return QStringLiteral(";X-LABEL=") + *label;
+}
+
 struct ContentLine
 {
     QString name;
     QStringList typeTokens;
+    std::optional<QString> xLabelParam; // "X-LABEL=" -- websites/URL only
+    std::optional<QString> labelParam; // "LABEL=" -- X-LLAMA-CUSTOM only
     QString value; // still escaped; caller unescapes per-field
 };
 
-// Splits one already-unfolded logical line into property name, TYPE=
-// parameter tokens (the only parameter this converter needs), and raw
-// value. The first ':' always separates head from value because property
-// names/parameters never contain a literal colon.
+// Splits one already-unfolded logical line into property name, its TYPE=/
+// X-LABEL=/LABEL= parameters (the only parameters this converter needs),
+// and raw value. The first ':' always separates head from value because
+// property names/parameters never contain a literal colon.
 ContentLine parseContentLine(const QString& line)
 {
     ContentLine result;
@@ -223,8 +235,14 @@ ContentLine parseContentLine(const QString& line)
         const int eq = param.indexOf(QLatin1Char('='));
         if (eq < 0)
             continue;
-        if (param.left(eq).compare(QStringLiteral("TYPE"), Qt::CaseInsensitive) == 0)
-            result.typeTokens = param.mid(eq + 1).split(QLatin1Char(','));
+        const QString paramName = param.left(eq);
+        const QString paramValue = param.mid(eq + 1);
+        if (paramName.compare(QStringLiteral("TYPE"), Qt::CaseInsensitive) == 0)
+            result.typeTokens = paramValue.split(QLatin1Char(','));
+        else if (paramName.compare(QStringLiteral("X-LABEL"), Qt::CaseInsensitive) == 0)
+            result.xLabelParam = paramValue;
+        else if (paramName.compare(QStringLiteral("LABEL"), Qt::CaseInsensitive) == 0)
+            result.labelParam = paramValue;
     }
     return result;
 }
@@ -293,7 +311,13 @@ QString contactToVCard(const Contact& contact)
 
     appendTextProperty(lines, QStringLiteral("FN"), contact.fn);
     appendTextProperty(lines, QStringLiteral("NICKNAME"), contact.nickname);
-    appendTextProperty(lines, QStringLiteral("ORG"), contact.org);
+    // department: ORG's 2nd component (org is the 1st) -- built manually
+    // rather than via appendTextProperty (which only handles single-value
+    // properties), emitted whenever either component is present.
+    if (contact.org || contact.department) {
+        lines << foldLine(QStringLiteral("ORG:") + escapeText(contact.org.value_or(QString())) + QLatin1Char(';')
+            + escapeText(contact.department.value_or(QString())));
+    }
     appendTextProperty(lines, QStringLiteral("TITLE"), contact.title);
     appendTextProperty(lines, QStringLiteral("NOTE"), contact.notes);
     appendTextProperty(lines, QStringLiteral("BDAY"), contact.birthday);
@@ -301,6 +325,15 @@ QString contactToVCard(const Contact& contact)
     // no-op-when-absent covers the "absence never means now" half of the
     // decision, the read side covers the other half.
     appendTextProperty(lines, QStringLiteral("REV"), contact.updatedAt);
+    appendTextProperty(lines, QStringLiteral("KEY"), contact.pgpKey);
+    // phoneticGivenName/phoneticFamilyName -> X-PHONETIC-FIRST-NAME/
+    // X-PHONETIC-LAST-NAME: Apple's de facto convention, not a vCard 3.0
+    // standard -- unverified against a real KAddressBook/EDS export,
+    // re-check when Task 7/8 lands a real backend.
+    appendTextProperty(lines, QStringLiteral("X-PHONETIC-FIRST-NAME"), contact.phoneticGivenName);
+    appendTextProperty(lines, QStringLiteral("X-PHONETIC-LAST-NAME"), contact.phoneticFamilyName);
+    // pronouns: no vCard concept at all (matches Android's own "app-only"
+    // treatment) -- never written, and nothing else here depends on it.
 
     for (const ContactEmailEntry& email : contact.emails) {
         lines << foldLine(QStringLiteral("EMAIL") + typeParamForWrite(email.label) + QLatin1Char(':')
@@ -321,6 +354,62 @@ QString contactToVCard(const Contact& contact)
             + escapeText(addr.postalCode.value_or(QString())) + QLatin1Char(';')
             + escapeText(addr.country.value_or(QString())));
     }
+
+    for (const ContactImEntry& im : contact.ims) {
+        // X-IMPP-<SERVICE>: vCard 3.0 has no IMPP property (that's 4.0) --
+        // unverified against a real KAddressBook/EDS export, re-check when
+        // Task 7/8 lands a real backend.
+        const QString serviceSuffix
+            = (im.service && !im.service->isEmpty()) ? QLatin1Char('-') + im.service->toUpper() : QString();
+        lines << foldLine(QStringLiteral("X-IMPP") + serviceSuffix + typeParamForWrite(im.label) + QLatin1Char(':')
+            + escapeText(im.value));
+    }
+    for (const ContactUrlEntry& website : contact.websites) {
+        lines << foldLine(
+            QStringLiteral("URL") + xLabelParamForWrite(website.label) + QLatin1Char(':') + escapeText(website.value));
+    }
+    for (const ContactRelationEntry& relation : contact.relations) {
+        // X-RELATED: vCard 3.0 has no RELATED property (that's 4.0) --
+        // unverified against a real KAddressBook/EDS export, re-check when
+        // Task 7/8 lands a real backend.
+        lines << foldLine(QStringLiteral("X-RELATED") + typeParamForWrite(relation.label) + QLatin1Char(':')
+            + escapeText(relation.name));
+    }
+    for (const ContactEventEntry& event : contact.events) {
+        // X-ABDATE: non-birthday dates have no vCard 3.0 standard property
+        // -- unverified against a real KAddressBook/EDS export, re-check
+        // when Task 7/8 lands a real backend. Contact.birthday itself stays
+        // the separate BDAY property, unaffected.
+        lines << foldLine(
+            QStringLiteral("X-ABDATE") + typeParamForWrite(event.label) + QLatin1Char(':') + escapeText(event.date));
+    }
+    for (const ContactCustomFieldEntry& field : contact.customFields) {
+        // X-LLAMA-CUSTOM: app-specific free-form fields have no vCard
+        // concept at all -- unverified against a real KAddressBook/EDS
+        // export, re-check when Task 7/8 lands a real backend.
+        lines << foldLine(
+            QStringLiteral("X-LLAMA-CUSTOM;LABEL=") + field.label + QLatin1Char(':') + escapeText(field.value));
+    }
+
+    if (!contact.groupIds.isEmpty()) {
+        // groupIDs -> CATEGORIES: a genuine vCard 3.0 standard property, no
+        // caveat needed. Display names live server-side (GET /api/groups,
+        // Task 2) -- only the membership ids round-trip here.
+        QStringList escapedGroupIds;
+        escapedGroupIds.reserve(contact.groupIds.size());
+        for (const QString& groupId : contact.groupIds)
+            escapedGroupIds << escapeText(groupId);
+        lines << foldLine(QStringLiteral("CATEGORIES:") + escapedGroupIds.join(QLatin1Char(',')));
+    }
+
+    // photoRef -> PHOTO: Contact.photoRef is only an opaque reference
+    // string (the actual photo bytes are fetched/cached separately,
+    // Task 3), not image data -- so this deliberately writes PHOTO as a
+    // plain text value containing photoRef itself, NOT a real
+    // base64-encoded ENCODING=b PHOTO property. Writing genuine base64
+    // PHOTO data, once photo bytes are available at the vCard-generation
+    // call site, is future work.
+    appendTextProperty(lines, QStringLiteral("PHOTO"), contact.photoRef);
 
     lines << QStringLiteral("END:VCARD");
     return lines.join(QStringLiteral("\r\n")) + QStringLiteral("\r\n");
@@ -359,7 +448,12 @@ Contact contactFromVCard(const QString& vcard)
         } else if (name == QStringLiteral("NICKNAME")) {
             contact.nickname = emptyToNullopt(unescapeText(cl.value));
         } else if (name == QStringLiteral("ORG")) {
-            contact.org = emptyToNullopt(unescapeText(cl.value));
+            // department: ORG's 2nd component (see write side for why this
+            // isn't appendTextProperty-shaped).
+            const QStringList parts = splitUnescaped(cl.value, QLatin1Char(';'));
+            auto at = [&](int i) { return i < parts.size() ? parts.at(i) : QString(); };
+            contact.org = emptyToNullopt(unescapeText(at(0)));
+            contact.department = emptyToNullopt(unescapeText(at(1)));
         } else if (name == QStringLiteral("TITLE")) {
             contact.title = emptyToNullopt(unescapeText(cl.value));
         } else if (name == QStringLiteral("NOTE")) {
@@ -376,9 +470,56 @@ Contact contactFromVCard(const QString& vcard)
             contact.phones.append(parsePhoneLine(cl));
         } else if (name == QStringLiteral("ADR")) {
             contact.addresses.append(parseAddressLine(cl));
+        } else if (name == QStringLiteral("KEY")) {
+            contact.pgpKey = emptyToNullopt(unescapeText(cl.value));
+        } else if (name == QStringLiteral("X-PHONETIC-FIRST-NAME")) {
+            contact.phoneticGivenName = emptyToNullopt(unescapeText(cl.value));
+        } else if (name == QStringLiteral("X-PHONETIC-LAST-NAME")) {
+            contact.phoneticFamilyName = emptyToNullopt(unescapeText(cl.value));
+        } else if (name.startsWith(QStringLiteral("X-IMPP"))) {
+            // X-IMPP[-<SERVICE>]: mirrors the write side's unverified,
+            // vCard-3.0-has-no-IMPP caveat.
+            ContactImEntry entry;
+            static const QString kImppPrefix = QStringLiteral("X-IMPP");
+            if (name.size() > kImppPrefix.size() && name.at(kImppPrefix.size()) == QLatin1Char('-'))
+                entry.service = emptyToNullopt(name.mid(kImppPrefix.size() + 1).toLower());
+            entry.label = firstNonPrefTypeLower(cl.typeTokens);
+            entry.value = unescapeText(cl.value);
+            contact.ims.append(entry);
+        } else if (name == QStringLiteral("URL")) {
+            ContactUrlEntry entry;
+            entry.label = cl.xLabelParam ? emptyToNullopt(*cl.xLabelParam) : std::nullopt;
+            entry.value = unescapeText(cl.value);
+            contact.websites.append(entry);
+        } else if (name == QStringLiteral("X-RELATED")) {
+            ContactRelationEntry entry;
+            entry.label = firstNonPrefTypeLower(cl.typeTokens);
+            entry.name = unescapeText(cl.value);
+            contact.relations.append(entry);
+        } else if (name == QStringLiteral("X-ABDATE")) {
+            ContactEventEntry entry;
+            entry.label = firstNonPrefTypeLower(cl.typeTokens);
+            entry.date = unescapeText(cl.value);
+            contact.events.append(entry);
+        } else if (name == QStringLiteral("X-LLAMA-CUSTOM")) {
+            ContactCustomFieldEntry entry;
+            entry.label = cl.labelParam.value_or(QString());
+            entry.value = unescapeText(cl.value);
+            contact.customFields.append(entry);
+        } else if (name == QStringLiteral("CATEGORIES")) {
+            // groupIDs: a genuine vCard 3.0 standard property, no caveat
+            // needed (see write side).
+            for (const QString& rawGroupId : splitUnescaped(cl.value, QLatin1Char(','))) {
+                const QString groupId = unescapeText(rawGroupId);
+                if (!groupId.isEmpty())
+                    contact.groupIds.append(groupId);
+            }
+        } else if (name == QStringLiteral("PHOTO")) {
+            // photoRef: see write side -- this is the opaque reference
+            // string, never real base64 photo bytes.
+            contact.photoRef = emptyToNullopt(unescapeText(cl.value));
         }
-        // BEGIN/VERSION/END/UID and anything unrecognized (PHOTO,
-        // CATEGORIES, IMPP, ... -- out of scope, no Contact field): ignored.
+        // BEGIN/VERSION/END/UID and anything else unrecognized: ignored.
         // UID specifically is never conflated with Contact.uid regardless
         // of what a real-world exporter puts there (see decision table).
     }

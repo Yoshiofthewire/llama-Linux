@@ -22,6 +22,18 @@ private slots:
     void addressPoBoxAndExtendedAlwaysEmpty();
     void longNoteFoldsAndUnfoldsExactly();
     void noteEscapesCommaSemicolonBackslashAndNewline();
+    void roundTripsPgpKeyAndPhoneticNames();
+    void departmentRoundTripsAsOrgSecondComponent();
+    void departmentWithoutOrgRoundTrips();
+    void roundTripsImsWithServiceAndLabel();
+    void imWithoutServiceUsesPlainXImppProperty();
+    void roundTripsWebsitesWithXLabel();
+    void roundTripsRelationsAndEvents();
+    void roundTripsCustomFields();
+    void groupIdsRoundTripViaCategories();
+    void photoRefRoundTripsAsPlainTextProperty();
+    void pronounsNeverWrittenAndRoundTripsAsAbsent();
+    void absentNewFieldsProduceNoLinesAndDefaultOnRead();
 };
 
 void VCardContactTest::roundTripsEveryScalarField()
@@ -254,6 +266,211 @@ void VCardContactTest::noteEscapesCommaSemicolonBackslashAndNewline()
 
     const Contact roundTripped = VCardContact::contactFromVCard(vcard);
     QCOMPARE(roundTripped.notes, contact.notes);
+}
+
+void VCardContactTest::roundTripsPgpKeyAndPhoneticNames()
+{
+    Contact contact;
+    contact.pgpKey = QStringLiteral("-----BEGIN PGP PUBLIC KEY-----");
+    contact.phoneticGivenName = QStringLiteral("Ay-da");
+    contact.phoneticFamilyName = QStringLiteral("Lav-lace");
+
+    const QString vcard = VCardContact::contactToVCard(contact);
+    QVERIFY(vcard.contains(QStringLiteral("KEY:-----BEGIN PGP PUBLIC KEY-----")));
+    QVERIFY(vcard.contains(QStringLiteral("X-PHONETIC-FIRST-NAME:Ay-da")));
+    QVERIFY(vcard.contains(QStringLiteral("X-PHONETIC-LAST-NAME:Lav-lace")));
+
+    const Contact roundTripped = VCardContact::contactFromVCard(vcard);
+    QCOMPARE(roundTripped.pgpKey, contact.pgpKey);
+    QCOMPARE(roundTripped.phoneticGivenName, contact.phoneticGivenName);
+    QCOMPARE(roundTripped.phoneticFamilyName, contact.phoneticFamilyName);
+}
+
+void VCardContactTest::departmentRoundTripsAsOrgSecondComponent()
+{
+    Contact contact;
+    contact.org = QStringLiteral("Analytical Engines Ltd");
+    contact.department = QStringLiteral("Research");
+
+    const QString vcard = VCardContact::contactToVCard(contact);
+    QVERIFY(vcard.contains(QStringLiteral("ORG:Analytical Engines Ltd;Research")));
+
+    const Contact roundTripped = VCardContact::contactFromVCard(vcard);
+    QCOMPARE(roundTripped.org, contact.org);
+    QCOMPARE(roundTripped.department, contact.department);
+}
+
+void VCardContactTest::departmentWithoutOrgRoundTrips()
+{
+    Contact contact;
+    contact.department = QStringLiteral("Research");
+
+    const QString vcard = VCardContact::contactToVCard(contact);
+    QVERIFY(vcard.contains(QStringLiteral("ORG:;Research")));
+
+    const Contact roundTripped = VCardContact::contactFromVCard(vcard);
+    QCOMPARE(roundTripped.org, std::optional<QString>(std::nullopt));
+    QCOMPARE(roundTripped.department, contact.department);
+}
+
+void VCardContactTest::roundTripsImsWithServiceAndLabel()
+{
+    Contact contact;
+    contact.ims = { ContactImEntry{ QStringLiteral("matrix"), QStringLiteral("work"),
+                                     QStringLiteral("@ada:example.org") } };
+
+    const QString vcard = VCardContact::contactToVCard(contact);
+    QVERIFY(vcard.contains(QStringLiteral("X-IMPP-MATRIX;TYPE=WORK:@ada:example.org")));
+
+    const Contact roundTripped = VCardContact::contactFromVCard(vcard);
+    QCOMPARE(roundTripped.ims.size(), 1);
+    QCOMPARE(roundTripped.ims.first().service, std::optional<QString>(QStringLiteral("matrix")));
+    QCOMPARE(roundTripped.ims.first().label, std::optional<QString>(QStringLiteral("work")));
+    QCOMPARE(roundTripped.ims.first().value, contact.ims.first().value);
+}
+
+void VCardContactTest::imWithoutServiceUsesPlainXImppProperty()
+{
+    Contact contact;
+    contact.ims = { ContactImEntry{ std::nullopt, std::nullopt, QStringLiteral("ada@example.org") } };
+
+    const QString vcard = VCardContact::contactToVCard(contact);
+    QVERIFY(vcard.contains(QStringLiteral("X-IMPP:ada@example.org")));
+    QVERIFY(!vcard.contains(QStringLiteral("X-IMPP-")));
+
+    const Contact roundTripped = VCardContact::contactFromVCard(vcard);
+    QCOMPARE(roundTripped.ims.size(), 1);
+    QCOMPARE(roundTripped.ims.first().service, std::optional<QString>(std::nullopt));
+    QCOMPARE(roundTripped.ims.first().label, std::optional<QString>(std::nullopt));
+    QCOMPARE(roundTripped.ims.first().value, QStringLiteral("ada@example.org"));
+}
+
+void VCardContactTest::roundTripsWebsitesWithXLabel()
+{
+    Contact contact;
+    contact.websites = { ContactUrlEntry{ QStringLiteral("blog"), QStringLiteral("https://ada.example.com") },
+                          ContactUrlEntry{ std::nullopt, QStringLiteral("https://nolabel.example.com") } };
+
+    const QString vcard = VCardContact::contactToVCard(contact);
+    QVERIFY(vcard.contains(QStringLiteral("URL;X-LABEL=blog:https://ada.example.com")));
+    QVERIFY(vcard.contains(QStringLiteral("URL:https://nolabel.example.com")));
+
+    const Contact roundTripped = VCardContact::contactFromVCard(vcard);
+    QCOMPARE(roundTripped.websites, contact.websites);
+}
+
+void VCardContactTest::roundTripsRelationsAndEvents()
+{
+    Contact contact;
+    contact.relations = { ContactRelationEntry{ QStringLiteral("spouse"), QStringLiteral("Grace Hopper") } };
+    contact.events = { ContactEventEntry{ QStringLiteral("anniversary"), QStringLiteral("2010-06-01") } };
+
+    const QString vcard = VCardContact::contactToVCard(contact);
+    QVERIFY(vcard.contains(QStringLiteral("X-RELATED;TYPE=SPOUSE:Grace Hopper")));
+    QVERIFY(vcard.contains(QStringLiteral("X-ABDATE;TYPE=ANNIVERSARY:2010-06-01")));
+
+    const Contact roundTripped = VCardContact::contactFromVCard(vcard);
+    QCOMPARE(roundTripped.relations.size(), 1);
+    QCOMPARE(roundTripped.relations.first().label, std::optional<QString>(QStringLiteral("spouse")));
+    QCOMPARE(roundTripped.relations.first().name, contact.relations.first().name);
+    QCOMPARE(roundTripped.events.size(), 1);
+    QCOMPARE(roundTripped.events.first().label, std::optional<QString>(QStringLiteral("anniversary")));
+    QCOMPARE(roundTripped.events.first().date, contact.events.first().date);
+}
+
+void VCardContactTest::roundTripsCustomFields()
+{
+    Contact contact;
+    contact.customFields = { ContactCustomFieldEntry{ QStringLiteral("Employee ID"), QStringLiteral("42") } };
+
+    const QString vcard = VCardContact::contactToVCard(contact);
+    QVERIFY(vcard.contains(QStringLiteral("X-LLAMA-CUSTOM;LABEL=Employee ID:42")));
+
+    const Contact roundTripped = VCardContact::contactFromVCard(vcard);
+    QCOMPARE(roundTripped.customFields, contact.customFields);
+}
+
+void VCardContactTest::groupIdsRoundTripViaCategories()
+{
+    Contact contact;
+    contact.groupIds = { QStringLiteral("friends"), QStringLiteral("work") };
+
+    const QString vcard = VCardContact::contactToVCard(contact);
+    QVERIFY(vcard.contains(QStringLiteral("CATEGORIES:friends,work")));
+
+    const Contact roundTripped = VCardContact::contactFromVCard(vcard);
+    QCOMPARE(roundTripped.groupIds, contact.groupIds);
+
+    Contact withoutGroups;
+    const QString vcard2 = VCardContact::contactToVCard(withoutGroups);
+    QVERIFY(!vcard2.contains(QStringLiteral("CATEGORIES")));
+    const Contact roundTripped2 = VCardContact::contactFromVCard(vcard2);
+    QVERIFY(roundTripped2.groupIds.isEmpty());
+}
+
+void VCardContactTest::photoRefRoundTripsAsPlainTextProperty()
+{
+    Contact contact;
+    contact.photoRef = QStringLiteral("photo-cache/ada.jpg");
+
+    const QString vcard = VCardContact::contactToVCard(contact);
+    QVERIFY(vcard.contains(QStringLiteral("PHOTO:photo-cache/ada.jpg")));
+
+    const Contact roundTripped = VCardContact::contactFromVCard(vcard);
+    QCOMPARE(roundTripped.photoRef, contact.photoRef);
+
+    Contact withoutPhoto;
+    const QString vcard2 = VCardContact::contactToVCard(withoutPhoto);
+    QVERIFY(!vcard2.contains(QStringLiteral("PHOTO")));
+    const Contact roundTripped2 = VCardContact::contactFromVCard(vcard2);
+    QCOMPARE(roundTripped2.photoRef, std::optional<QString>(std::nullopt));
+}
+
+void VCardContactTest::pronounsNeverWrittenAndRoundTripsAsAbsent()
+{
+    Contact contact;
+    contact.pronouns = QStringLiteral("she/her");
+    contact.fn = QStringLiteral("Ada Lovelace");
+    contact.pgpKey = QStringLiteral("keydata");
+
+    const QString vcard = VCardContact::contactToVCard(contact);
+    QVERIFY(!vcard.contains(QStringLiteral("she/her")));
+
+    const Contact roundTripped = VCardContact::contactFromVCard(vcard);
+    QCOMPARE(roundTripped.pronouns, std::optional<QString>(std::nullopt));
+    // Other fields must round-trip unaffected by pronouns' total absence.
+    QCOMPARE(roundTripped.fn, contact.fn);
+    QCOMPARE(roundTripped.pgpKey, contact.pgpKey);
+}
+
+void VCardContactTest::absentNewFieldsProduceNoLinesAndDefaultOnRead()
+{
+    Contact contact;
+    contact.fn = QStringLiteral("Plain Contact");
+
+    const QString vcard = VCardContact::contactToVCard(contact);
+    QVERIFY(!vcard.contains(QStringLiteral("KEY:")));
+    QVERIFY(!vcard.contains(QStringLiteral("X-PHONETIC")));
+    QVERIFY(!vcard.contains(QStringLiteral("X-IMPP")));
+    QVERIFY(!vcard.contains(QStringLiteral("URL")));
+    QVERIFY(!vcard.contains(QStringLiteral("X-RELATED")));
+    QVERIFY(!vcard.contains(QStringLiteral("X-ABDATE")));
+    QVERIFY(!vcard.contains(QStringLiteral("X-LLAMA-CUSTOM")));
+    QVERIFY(!vcard.contains(QStringLiteral("CATEGORIES")));
+    QVERIFY(!vcard.contains(QStringLiteral("PHOTO")));
+
+    const Contact roundTripped = VCardContact::contactFromVCard(vcard);
+    QCOMPARE(roundTripped.pgpKey, std::optional<QString>(std::nullopt));
+    QCOMPARE(roundTripped.phoneticGivenName, std::optional<QString>(std::nullopt));
+    QCOMPARE(roundTripped.phoneticFamilyName, std::optional<QString>(std::nullopt));
+    QCOMPARE(roundTripped.department, std::optional<QString>(std::nullopt));
+    QVERIFY(roundTripped.ims.isEmpty());
+    QVERIFY(roundTripped.websites.isEmpty());
+    QVERIFY(roundTripped.relations.isEmpty());
+    QVERIFY(roundTripped.events.isEmpty());
+    QVERIFY(roundTripped.customFields.isEmpty());
+    QVERIFY(roundTripped.groupIds.isEmpty());
+    QCOMPARE(roundTripped.photoRef, std::optional<QString>(std::nullopt));
 }
 
 QTEST_GUILESS_MAIN(VCardContactTest)
