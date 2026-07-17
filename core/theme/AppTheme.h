@@ -9,7 +9,7 @@ namespace AppTheme
     // not reorder or rename.
     QStringList themeNames();
 
-    QString defaultThemeName(); // "Dark Matter"
+    QString defaultThemeName(); // "Patina Ky"
 
     // Returns the named palette, or the default palette if `name` is
     // unknown (mirrors AppTheme.swift's `palettes[name] ??

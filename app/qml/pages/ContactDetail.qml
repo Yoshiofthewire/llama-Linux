@@ -1,8 +1,9 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import com.urlxl.LlamaMail 1.0
+import com.urlxl.mail 1.0
 import "../components"
+import "../utils/format.js" as Format
 
 // Task 36 -- plain reusable Item, deliberately NOT a Kirigami.Page (see
 // Phase 6 global constraint 4): MobileRoot wraps this in a thin
@@ -40,6 +41,13 @@ Item {
     // (possibly newly-assigned) uid -- lets a host refresh a list/selection
     // without this component needing to know anything about lists.
     signal saved(string uid)
+    // PGP QR key exchange: the "Scan to add key" button below emits this
+    // instead of navigating itself, same "let the host decide" shape as
+    // closed()/saved() -- the host pushes/opens PgpScanContactKey.qml and
+    // wires its keyScanned(name, publicKey) signal back to applyScannedKey()
+    // below, directly on this still-open form (nothing is persisted until
+    // the user hits this form's own Save button).
+    signal scanPgpKeyRequested()
 
     implicitWidth: 360
     implicitHeight: 640
@@ -218,6 +226,16 @@ Item {
         }
     }
 
+    // PGP QR key exchange: called by the host after PgpScanContactKey.qml's
+    // keyScanned(name, publicKey) fires (see scanPgpKeyRequested() above).
+    // Only fills nameField if it's still blank -- never overwrites a name
+    // the user already typed/loaded for an existing contact.
+    function applyScannedKey(name, publicKey) {
+        if (nameField.text.trim() === "")
+            nameField.text = name
+        pgpKeyField.text = publicKey
+    }
+
     function doDelete() {
         // No confirmation dialog -- matches Android's behavior exactly, and
         // Mac's reviewed source doesn't have one either (per the brief).
@@ -281,20 +299,6 @@ Item {
         customFieldsField.entries = []
     }
 
-    // Same "up to 2 characters from whitespace-split name parts" shape as
-    // ContactsList.qml's initialsFor() -- see that file's comment on why
-    // this small helper is duplicated rather than shared.
-    function initialsFor(fn) {
-        const s = (fn || "").trim()
-        if (s.length === 0)
-            return "?"
-        const parts = s.split(/\s+/).filter(function (p) { return p.length > 0 })
-        let initials = ""
-        for (let i = 0; i < parts.length && initials.length < 2; i++)
-            initials += parts[i].charAt(0).toUpperCase()
-        return initials
-    }
-
     // ---- layout ----------------------------------------------------
 
     // Wrapped in a Flickable for the same reason as EmailDetail.qml (Task
@@ -332,7 +336,7 @@ Item {
                     spacing: 12
 
                     Avatar {
-                        initials: root.initialsFor(root.contact.fn)
+                        initials: Format.initialsFromName(root.contact.fn)
                         // extended-contact-fields Task 3: fetch lazily on
                         // contact-detail open -- root.contact is already
                         // ContactsApp.contactAt(uid)'s full result (loaded
@@ -498,6 +502,14 @@ Item {
                     id: pgpKeyField
                     Layout.fillWidth: true
                     placeholderText: i18n("PGP Key")
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    GhostButton {
+                        text: i18n("Scan to add key")
+                        onClicked: root.scanPgpKeyRequested()
+                    }
+                    Item { Layout.fillWidth: true }
                 }
 
                 // ---- extended-contact-fields Task 5: list-typed fields ---

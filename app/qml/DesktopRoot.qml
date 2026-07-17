@@ -2,9 +2,10 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import org.kde.kirigami 2.20 as Kirigami
-import com.urlxl.LlamaMail 1.0
+import com.urlxl.mail 1.0
 import "components"
 import "pages"
+import "utils/format.js" as Format
 
 // Task 39 -- top-level desktop navigation shell, replacing the Task 1 stub.
 // Per Phase 6 global constraint 4, this is a persistent 3-column layout
@@ -27,7 +28,7 @@ Kirigami.ApplicationWindow {
     width: 1024
     height: 768
     visible: true
-    title: "Llama Mail" // product name -- not translated, same as MobileRoot.qml's window title
+    title: "KyPost" // product name -- not translated, same as MobileRoot.qml's window title
 
     // ---- selection state --------------------------------------------
     property string currentSection: "mail" // "mail" | "contacts"
@@ -53,12 +54,7 @@ Kirigami.ApplicationWindow {
     property bool detailCollapsed: false
 
     function folderDisplayName(wireName) {
-        const folders = MailApp.standardFolders()
-        for (let i = 0; i < folders.length; i++) {
-            if (folders[i].wireName === wireName)
-                return folders[i].displayName
-        }
-        return wireName
+        return Format.folderDisplayName(MailApp.standardFolders(), wireName)
     }
 
     function selectFolder(wireName) {
@@ -179,6 +175,48 @@ Kirigami.ApplicationWindow {
             implicitWidth: 480
             implicitHeight: 560
             onClosed: settingsSheet.close()
+            onMyPgpQrCodeRequested: {
+                settingsSheet.close()
+                pgpMyQrCodeSheet.open()
+            }
+        }
+    }
+
+    // ---- PGP QR key exchange: two more OverlaySheets, same choice as
+    // settingsSheet above (no second top-level window/event-loop to manage).
+    Kirigami.OverlaySheet {
+        id: pgpMyQrCodeSheet
+
+        PgpMyQrCode {
+            implicitWidth: 360
+            implicitHeight: 480
+            onClosed: pgpMyQrCodeSheet.close()
+        }
+    }
+
+    Kirigami.OverlaySheet {
+        id: pgpScanContactKeySheet
+        // Set right before open() by whichever entry point below opened
+        // this sheet -- null means "create a brand-new contact from the
+        // scan" (the contacts-list entry point); non-null means "write
+        // into the persistently-embedded ContactDetail pane instead" (the
+        // ContactDetail pane's own entry point, unlike MobileRoot there is
+        // only ever one ContactDetail instance here, not one per push, so
+        // this can point at it directly rather than capturing a per-push
+        // reference).
+        property var targetContactDetail: null
+
+        PgpScanContactKey {
+            implicitWidth: 360
+            implicitHeight: 640
+            onClosed: pgpScanContactKeySheet.close()
+            onKeyScanned: function (name, publicKey) {
+                if (pgpScanContactKeySheet.targetContactDetail)
+                    pgpScanContactKeySheet.targetContactDetail.applyScannedKey(name, publicKey)
+                else
+                    ContactsApp.createContact({ fn: name, pgpKey: publicKey })
+                pgpScanContactKeySheet.close()
+            }
         }
     }
 
@@ -227,7 +265,7 @@ Kirigami.ApplicationWindow {
 
                 Text {
                     Layout.fillWidth: true
-                    text: "Llama Mail" // product name -- not translated, see ApplicationWindow.title above
+                    text: "KyPost" // product name -- not translated, see ApplicationWindow.title above
                     color: Theme.inkStrong
                     font.family: Theme.fontUi
                     font.pixelSize: 16
@@ -517,6 +555,10 @@ Kirigami.ApplicationWindow {
                     anchors.fill: parent
                     visible: root.currentSection === "contacts"
                     onContactSelected: function (uid) { root.selectContact(uid) }
+                    onScanPgpKeyRequested: {
+                        pgpScanContactKeySheet.targetContactDetail = null
+                        pgpScanContactKeySheet.open()
+                    }
                 }
             }
 
@@ -552,11 +594,16 @@ Kirigami.ApplicationWindow {
                 }
 
                 ContactDetail {
+                    id: contactDetailPane
                     anchors.fill: parent
                     visible: root.detailMode === "contact"
                     uid: root.detailMode === "contact" ? root.selectedContactUid : ""
                     onClosed: root.closeDetail()
                     onSaved: function (uid) { ContactsApp.load() }
+                    onScanPgpKeyRequested: {
+                        pgpScanContactKeySheet.targetContactDetail = contactDetailPane
+                        pgpScanContactKeySheet.open()
+                    }
                 }
 
                 Loader {

@@ -4,25 +4,10 @@
 #include "net/RelayAuth.h"
 
 #include <QJsonArray>
-#include <QJsonDocument>
 #include <QJsonObject>
-#include <QJsonParseError>
 #include <QJsonValue>
 
 namespace {
-
-// Appends "api/groups" to serverBaseUrl's path -- same trailing-slash-safe
-// approach as ContactSyncClient.cpp's endpointFor().
-QUrl endpointFor(const QUrl& serverBaseUrl)
-{
-    QUrl url = serverBaseUrl;
-    QString path = url.path();
-    if (!path.endsWith(QLatin1Char('/')))
-        path += QLatin1Char('/');
-    path += QStringLiteral("api/groups");
-    url.setPath(path);
-    return url;
-}
 
 Group groupFromJson(const QJsonObject& obj)
 {
@@ -42,7 +27,8 @@ GroupsClient::GroupsClient(HttpClient& httpClient)
 
 GroupsFetchResult GroupsClient::fetch(const QUrl& serverBaseUrl, const RelayAuth& auth) const
 {
-    const HttpClient::HttpResult result = m_httpClient.get(endpointFor(serverBaseUrl), auth.queryItems());
+    const HttpClient::HttpResult result =
+        m_httpClient.get(joinUrlPath(serverBaseUrl, QStringLiteral("api/groups")), auth.queryItems());
 
     GroupsFetchResult out;
 
@@ -58,17 +44,16 @@ GroupsFetchResult GroupsClient::fetch(const QUrl& serverBaseUrl, const RelayAuth
         return out;
     }
 
-    QJsonParseError parseError{};
-    const QJsonDocument doc = QJsonDocument::fromJson(result.body, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isArray()) {
+    QString errorString;
+    const std::optional<QJsonArray> array = decodeJsonArray(result.body, &errorString);
+    if (!array.has_value()) {
         out.error = NetworkError::Decoding;
-        out.detail = QStringLiteral("Failed to decode groups response: %1").arg(parseError.errorString());
+        out.detail = QStringLiteral("Failed to decode groups response: %1").arg(errorString);
         return out;
     }
 
-    const QJsonArray array = doc.array();
-    out.groups.reserve(array.size());
-    for (const QJsonValue& value : array)
+    out.groups.reserve(array->size());
+    for (const QJsonValue& value : *array)
         out.groups.append(groupFromJson(value.toObject()));
 
     return out;

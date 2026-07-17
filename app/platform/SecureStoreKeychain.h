@@ -4,6 +4,10 @@
 
 #include <QString>
 
+namespace QKeychain {
+class Job;
+}
+
 // SecureStore backed by the platform Secret Service via QtKeychain
 // (org.freedesktop.secrets over D-Bus). Lives in app/, not core/, because it
 // talks to QtDBus-adjacent infrastructure that core/ must never link. Each
@@ -20,5 +24,12 @@ public:
     bool contains(const QString& key) const override;
 
 private:
+    // Runs `job` synchronously to completion via a local QEventLoop tied to
+    // QKeychain::Job::finished. Returns true iff job.error() == NoError;
+    // callers needing textData() or a different error-code fallback (e.g.
+    // remove()'s EntryNotFound-is-ok case) still inspect `job` themselves
+    // afterward.
+    static bool runBlocking(QKeychain::Job& job);
+
     QString m_service;
 };

@@ -23,6 +23,7 @@
 
 #include <QHostAddress>
 #include <QNetworkAccessManager>
+#include <QSet>
 #include <QSignalSpy>
 #include <QTcpServer>
 #include <QTcpSocket>
@@ -90,6 +91,62 @@ private:
     bool m_contactsSyncRequestReceived = false;
 };
 
+// Same path-dispatch idea as DualPathFakeRelayServer, extended to a third
+// endpoint -- ContactsController::dedupe() on a successful merge chains into
+// sync() (contacts/sync pull) which on Success itself chains into
+// GroupsRepository::refresh() (api/groups), so a merge-then-sync test needs
+// three distinct canned responses behind one fake server.
+class TriplePathFakeRelayServer : public QObject
+{
+public:
+    TriplePathFakeRelayServer(QByteArray dedupeResponse, QByteArray contactsSyncResponse, QByteArray groupsResponse)
+        : m_dedupeResponse(std::move(dedupeResponse))
+        , m_contactsSyncResponse(std::move(contactsSyncResponse))
+        , m_groupsResponse(std::move(groupsResponse))
+    {
+        m_server.listen(QHostAddress::LocalHost);
+        connect(&m_server, &QTcpServer::newConnection, this, &TriplePathFakeRelayServer::onNewConnection);
+    }
+
+    quint16 port() const { return m_server.serverPort(); }
+    bool dedupeRequestReceived() const { return m_dedupeRequestReceived; }
+    bool contactsSyncRequestReceived() const { return m_contactsSyncRequestReceived; }
+    bool groupsRequestReceived() const { return m_groupsRequestReceived; }
+
+private:
+    void onNewConnection()
+    {
+        QTcpSocket* socket = m_server.nextPendingConnection();
+        auto buffer = std::make_shared<QByteArray>();
+        connect(socket, &QTcpSocket::readyRead, this, [this, socket, buffer]() {
+            *buffer += socket->readAll();
+            if (buffer->indexOf("\r\n\r\n") < 0)
+                return; // wait for the full header block
+
+            if (buffer->contains("/api/contacts/dedupe")) {
+                m_dedupeRequestReceived = true;
+                socket->write(m_dedupeResponse);
+            } else if (buffer->contains("/api/groups")) {
+                m_groupsRequestReceived = true;
+                socket->write(m_groupsResponse);
+            } else if (buffer->contains("/api/contacts/sync")) {
+                m_contactsSyncRequestReceived = true;
+                socket->write(m_contactsSyncResponse);
+            }
+            socket->flush();
+            socket->disconnectFromHost();
+        });
+    }
+
+    QTcpServer m_server;
+    QByteArray m_dedupeResponse;
+    QByteArray m_contactsSyncResponse;
+    QByteArray m_groupsResponse;
+    bool m_dedupeRequestReceived = false;
+    bool m_contactsSyncRequestReceived = false;
+    bool m_groupsRequestReceived = false;
+};
+
 } // namespace
 
 class ContactsControllerTest : public QObject
@@ -104,6 +161,15 @@ private slots:
     void syncSuccessRefreshesGroupsCache();
     void createAndUpdateContactRoundTripExtendedFields();
     void allGroupsReturnsCachedGroupsAsIdNameMaps();
+    void dedupeSuccessWithMergesChainsIntoSyncAndReloadsModel();
+    void dedupeSuccessWithZeroMergedSkipsSyncButReloadsModel();
+    void dedupeUnauthorizedSetsLastErrorNotStatusMessage();
+    void searchContactsMatchesAcrossMultipleEmailsPerContact();
+    void searchContactsIsCaseInsensitiveSubstring();
+    void searchContactsRanksPrefixMatchesFirst();
+    void searchContactsRespectsLimit();
+    void searchContactsEmptyQueryReturnsEverythingUpToLimit();
+    void searchContactsZeroOrNegativeLimitIsUnbounded();
 
 private:
     static void savePairing(PairingStore& pairingStore, quint16 port);
@@ -615,6 +681,439 @@ void ContactsControllerTest::allGroupsReturnsCachedGroupsAsIdNameMaps()
     const QVariantMap second = groups.at(1).toMap();
     QCOMPARE(second.value(QStringLiteral("id")).toString(), QStringLiteral("group-2"));
     QCOMPARE(second.value(QStringLiteral("name")).toString(), QStringLiteral("Work"));
+}
+
+void ContactsControllerTest::dedupeSuccessWithMergesChainsIntoSyncAndReloadsModel()
+{
+    const QByteArray dedupeResponse =
+        httpResponse(200, "OK", R"({"mergedCount":1,"groups":[{"survivor":"srv-1","absorbed":["srv-2"]}]})");
+    const QByteArray contactsSyncResponse = httpResponse(200, "OK",
+        R"({"cursor":7,"tooOld":false,"changed":[{"uid":"srv-1","rev":2,"fn":"Ada"}],)"
+        R"("deleted":[{"uid":"srv-2","rev":2}]})");
+    const QByteArray groupsResponse = httpResponse(200, "OK", R"([])");
+    TriplePathFakeRelayServer fake(dedupeResponse, contactsSyncResponse, groupsResponse);
+
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    GroupDao groupDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    Contact seedOne;
+    seedOne.uid = QStringLiteral("srv-1");
+    seedOne.rev = 1;
+    seedOne.fn = QStringLiteral("Ada");
+    QVERIFY(contactDao.insertOrReplace(seedOne));
+
+    Contact seedTwo;
+    seedTwo.uid = QStringLiteral("srv-2");
+    seedTwo.rev = 1;
+    seedTwo.fn = QStringLiteral("Ada Duplicate");
+    QVERIFY(contactDao.insertOrReplace(seedTwo));
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+    savePairing(pairingStore, fake.port());
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+    GroupsClient groupsClient(http);
+    GroupsRepository groupsRepository(groupsClient, groupDao, pairingStore);
+    ContactPhotoClient photoClient(http);
+    QTemporaryDir photoCacheDir;
+    QVERIFY(photoCacheDir.isValid());
+    ContactPhotoCache photoCache(photoCacheDir.path());
+    ContactPhotoRepository photoRepository(photoClient, photoCache, pairingStore);
+
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+    ContactsController controller(repository, groupsRepository, photoRepository);
+
+    controller.dedupe();
+
+    QVERIFY(fake.dedupeRequestReceived());
+    QVERIFY(fake.contactsSyncRequestReceived()); // proves dedupe() chained into sync()
+    QVERIFY(fake.groupsRequestReceived());       // proves sync()'s own Success->refresh() still ran
+
+    QCOMPARE(controller.lastError(), QString());
+    QVERIFY(controller.statusMessage().startsWith(QStringLiteral("Merged 1 duplicate(s)")));
+
+    // The tombstoned loser is gone from the local cache -- reloaded via the
+    // chained sync() call, not by dedupe() itself.
+    QVERIFY(!contactDao.findById(QStringLiteral("srv-2")).has_value());
+    QVERIFY(contactDao.findById(QStringLiteral("srv-1")).has_value());
+
+    auto* model = qobject_cast<ContactListModel*>(controller.contactModel());
+    QVERIFY(model != nullptr);
+    QCOMPARE(model->rowCount(), 1);
+}
+
+void ContactsControllerTest::dedupeSuccessWithZeroMergedSkipsSyncButReloadsModel()
+{
+    FakeRelayServer fake(httpResponse(200, "OK", R"({"mergedCount":0,"groups":[]})"));
+
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    GroupDao groupDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    Contact seed;
+    seed.uid = QStringLiteral("srv-1");
+    seed.rev = 1;
+    seed.fn = QStringLiteral("Ada");
+    QVERIFY(contactDao.insertOrReplace(seed));
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+    savePairing(pairingStore, fake.port());
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+    GroupsClient groupsClient(http);
+    GroupsRepository groupsRepository(groupsClient, groupDao, pairingStore);
+    ContactPhotoClient photoClient(http);
+    QTemporaryDir photoCacheDir;
+    QVERIFY(photoCacheDir.isValid());
+    ContactPhotoCache photoCache(photoCacheDir.path());
+    ContactPhotoRepository photoRepository(photoClient, photoCache, pairingStore);
+
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+    ContactsController controller(repository, groupsRepository, photoRepository);
+
+    controller.dedupe();
+
+    QCOMPARE(controller.lastError(), QString());
+    QCOMPARE(controller.statusMessage(), QStringLiteral("No duplicates found"));
+
+    // Only the dedupe endpoint should have been hit -- no chained sync().
+    QVERIFY(fake.receivedRequest().contains("POST /api/contacts/dedupe?"));
+    QVERIFY(!fake.receivedRequest().contains("/api/contacts/sync"));
+
+    auto* model = qobject_cast<ContactListModel*>(controller.contactModel());
+    QVERIFY(model != nullptr);
+    QCOMPARE(model->rowCount(), 1); // reloaded from the untouched cache
+}
+
+void ContactsControllerTest::dedupeUnauthorizedSetsLastErrorNotStatusMessage()
+{
+    FakeRelayServer fake(httpResponse(401, "Unauthorized", "Unauthorized\n"));
+
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    GroupDao groupDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+    savePairing(pairingStore, fake.port());
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+    GroupsClient groupsClient(http);
+    GroupsRepository groupsRepository(groupsClient, groupDao, pairingStore);
+    ContactPhotoClient photoClient(http);
+    QTemporaryDir photoCacheDir;
+    QVERIFY(photoCacheDir.isValid());
+    ContactPhotoCache photoCache(photoCacheDir.path());
+    ContactPhotoRepository photoRepository(photoClient, photoCache, pairingStore);
+
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+    ContactsController controller(repository, groupsRepository, photoRepository);
+
+    controller.dedupe();
+
+    QCOMPARE(controller.lastError(), QStringLiteral("Unauthorized -- please re-pair this device"));
+    QCOMPARE(controller.statusMessage(), QString());
+}
+
+// searchContacts() is a pure in-memory filter over m_repository.contacts()
+// -- none of these tests exercise networking/pairing, so each fixture below
+// only seeds ContactDao directly, same minimal-setup shape as
+// createContactRejectsBlankName above.
+
+void ContactsControllerTest::searchContactsMatchesAcrossMultipleEmailsPerContact()
+{
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    GroupDao groupDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    Contact ada;
+    ada.uid = QStringLiteral("c-1");
+    ada.fn = QStringLiteral("Ada Lovelace");
+    ada.emails = { ContactEmailEntry{ std::nullopt, QStringLiteral("ada@example.com") },
+                   ContactEmailEntry{ QStringLiteral("work"), QStringLiteral("ada.lovelace@work.example.com") } };
+    QVERIFY(contactDao.insertOrReplace(ada));
+
+    Contact grace;
+    grace.uid = QStringLiteral("c-2");
+    grace.fn = QStringLiteral("Grace Hopper");
+    grace.emails = { ContactEmailEntry{ std::nullopt, QStringLiteral("grace@example.com") } };
+    QVERIFY(contactDao.insertOrReplace(grace));
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+    GroupsClient groupsClient(http);
+    GroupsRepository groupsRepository(groupsClient, groupDao, pairingStore);
+    ContactPhotoClient photoClient(http);
+    QTemporaryDir photoCacheDir;
+    QVERIFY(photoCacheDir.isValid());
+    ContactPhotoCache photoCache(photoCacheDir.path());
+    ContactPhotoRepository photoRepository(photoClient, photoCache, pairingStore);
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+    ContactsController controller(repository, groupsRepository, photoRepository);
+
+    // "ada" matches both of Ada's emails -- each is its own candidate.
+    const QVariantList results = controller.searchContacts(QStringLiteral("ada"), 5);
+    QCOMPARE(results.size(), 2);
+    QCOMPARE(results.at(0).toMap().value(QStringLiteral("uid")).toString(), QStringLiteral("c-1"));
+    QCOMPARE(results.at(1).toMap().value(QStringLiteral("uid")).toString(), QStringLiteral("c-1"));
+    QSet<QString> matchedEmails{ results.at(0).toMap().value(QStringLiteral("email")).toString(),
+                                  results.at(1).toMap().value(QStringLiteral("email")).toString() };
+    QVERIFY(matchedEmails.contains(QStringLiteral("ada@example.com")));
+    QVERIFY(matchedEmails.contains(QStringLiteral("ada.lovelace@work.example.com")));
+}
+
+void ContactsControllerTest::searchContactsIsCaseInsensitiveSubstring()
+{
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    GroupDao groupDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    Contact grace;
+    grace.uid = QStringLiteral("c-1");
+    grace.fn = QStringLiteral("Grace Hopper");
+    grace.emails = { ContactEmailEntry{ std::nullopt, QStringLiteral("grace@EXAMPLE.com") } };
+    QVERIFY(contactDao.insertOrReplace(grace));
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+    GroupsClient groupsClient(http);
+    GroupsRepository groupsRepository(groupsClient, groupDao, pairingStore);
+    ContactPhotoClient photoClient(http);
+    QTemporaryDir photoCacheDir;
+    QVERIFY(photoCacheDir.isValid());
+    ContactPhotoCache photoCache(photoCacheDir.path());
+    ContactPhotoRepository photoRepository(photoClient, photoCache, pairingStore);
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+    ContactsController controller(repository, groupsRepository, photoRepository);
+
+    QCOMPARE(controller.searchContacts(QStringLiteral("HOPPER"), 5).size(), 1);
+    QCOMPARE(controller.searchContacts(QStringLiteral("example"), 5).size(), 1);
+    QVERIFY(controller.searchContacts(QStringLiteral("nomatch"), 5).isEmpty());
+}
+
+void ContactsControllerTest::searchContactsRanksPrefixMatchesFirst()
+{
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    GroupDao groupDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    // "Barbara Ann" only contains "ann" mid-name; "Anna Smith" starts with it.
+    Contact barbara;
+    barbara.uid = QStringLiteral("c-1");
+    barbara.fn = QStringLiteral("Barbara Ann");
+    barbara.emails = { ContactEmailEntry{ std::nullopt, QStringLiteral("barbara@example.com") } };
+    QVERIFY(contactDao.insertOrReplace(barbara));
+
+    Contact anna;
+    anna.uid = QStringLiteral("c-2");
+    anna.fn = QStringLiteral("Anna Smith");
+    anna.emails = { ContactEmailEntry{ std::nullopt, QStringLiteral("anna@example.com") } };
+    QVERIFY(contactDao.insertOrReplace(anna));
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+    GroupsClient groupsClient(http);
+    GroupsRepository groupsRepository(groupsClient, groupDao, pairingStore);
+    ContactPhotoClient photoClient(http);
+    QTemporaryDir photoCacheDir;
+    QVERIFY(photoCacheDir.isValid());
+    ContactPhotoCache photoCache(photoCacheDir.path());
+    ContactPhotoRepository photoRepository(photoClient, photoCache, pairingStore);
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+    ContactsController controller(repository, groupsRepository, photoRepository);
+
+    const QVariantList results = controller.searchContacts(QStringLiteral("ann"), 5);
+    QCOMPARE(results.size(), 2);
+    // Anna (prefix match) ranks before Barbara Ann (substring-elsewhere match),
+    // even though Barbara was inserted first.
+    QCOMPARE(results.at(0).toMap().value(QStringLiteral("uid")).toString(), QStringLiteral("c-2"));
+    QCOMPARE(results.at(1).toMap().value(QStringLiteral("uid")).toString(), QStringLiteral("c-1"));
+}
+
+void ContactsControllerTest::searchContactsRespectsLimit()
+{
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    GroupDao groupDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    for (int i = 0; i < 10; ++i) {
+        Contact c;
+        c.uid = QStringLiteral("c-%1").arg(i);
+        c.fn = QStringLiteral("Match Person %1").arg(i);
+        c.emails = { ContactEmailEntry{ std::nullopt, QStringLiteral("match%1@example.com").arg(i) } };
+        QVERIFY(contactDao.insertOrReplace(c));
+    }
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+    GroupsClient groupsClient(http);
+    GroupsRepository groupsRepository(groupsClient, groupDao, pairingStore);
+    ContactPhotoClient photoClient(http);
+    QTemporaryDir photoCacheDir;
+    QVERIFY(photoCacheDir.isValid());
+    ContactPhotoCache photoCache(photoCacheDir.path());
+    ContactPhotoRepository photoRepository(photoClient, photoCache, pairingStore);
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+    ContactsController controller(repository, groupsRepository, photoRepository);
+
+    QCOMPARE(controller.searchContacts(QStringLiteral("match"), 5).size(), 5);
+}
+
+void ContactsControllerTest::searchContactsEmptyQueryReturnsEverythingUpToLimit()
+{
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    GroupDao groupDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    Contact ada;
+    ada.uid = QStringLiteral("c-1");
+    ada.fn = QStringLiteral("Ada Lovelace");
+    ada.emails = { ContactEmailEntry{ std::nullopt, QStringLiteral("ada@example.com") } };
+    QVERIFY(contactDao.insertOrReplace(ada));
+
+    Contact grace;
+    grace.uid = QStringLiteral("c-2");
+    grace.fn = QStringLiteral("Grace Hopper");
+    grace.emails = { ContactEmailEntry{ std::nullopt, QStringLiteral("grace@example.com") } };
+    QVERIFY(contactDao.insertOrReplace(grace));
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+    GroupsClient groupsClient(http);
+    GroupsRepository groupsRepository(groupsClient, groupDao, pairingStore);
+    ContactPhotoClient photoClient(http);
+    QTemporaryDir photoCacheDir;
+    QVERIFY(photoCacheDir.isValid());
+    ContactPhotoCache photoCache(photoCacheDir.path());
+    ContactPhotoRepository photoRepository(photoClient, photoCache, pairingStore);
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+    ContactsController controller(repository, groupsRepository, photoRepository);
+
+    QCOMPARE(controller.searchContacts(QString(), 5).size(), 2);
+    QCOMPARE(controller.searchContacts(QStringLiteral("   "), 5).size(), 2); // whitespace-only trims to empty
+}
+
+void ContactsControllerTest::searchContactsZeroOrNegativeLimitIsUnbounded()
+{
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    GroupDao groupDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    for (int i = 0; i < 10; ++i) {
+        Contact c;
+        c.uid = QStringLiteral("c-%1").arg(i);
+        c.fn = QStringLiteral("Match Person %1").arg(i);
+        c.emails = { ContactEmailEntry{ std::nullopt, QStringLiteral("match%1@example.com").arg(i) } };
+        QVERIFY(contactDao.insertOrReplace(c));
+    }
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+    GroupsClient groupsClient(http);
+    GroupsRepository groupsRepository(groupsClient, groupDao, pairingStore);
+    ContactPhotoClient photoClient(http);
+    QTemporaryDir photoCacheDir;
+    QVERIFY(photoCacheDir.isValid());
+    ContactPhotoCache photoCache(photoCacheDir.path());
+    ContactPhotoRepository photoRepository(photoClient, photoCache, pairingStore);
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+    ContactsController controller(repository, groupsRepository, photoRepository);
+
+    QCOMPARE(controller.searchContacts(QStringLiteral("match"), 0).size(), 10);
+    QCOMPARE(controller.searchContacts(QStringLiteral("match"), -1).size(), 10);
 }
 
 QTEST_GUILESS_MAIN(ContactsControllerTest)

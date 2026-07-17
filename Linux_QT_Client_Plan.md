@@ -12,7 +12,7 @@ two UI roots:
 | Ubuntu Touch (Lomiri) | Kirigami (KF5, bundled in the click) | Clickable → OpenStore | Qt 5.15 | Mobile |
 
 New sibling repo: `~/git/llama-mail-qt` (this repo is Xcode-centric; don't nest).
-Suggested app IDs: `com.urlxl.LlamaMail` (Flatpak/Flathub), `llamamail.urlxl`
+Suggested app IDs: `com.urlxl.mail` (Flatpak/Flathub), `llamamail.urlxl`
 (click/OpenStore).
 
 ## UI architecture: unified-style app, two roots (like the iOS/macOS app)
@@ -305,7 +305,7 @@ llama-mail-qt/
       components/             # EmailListRow, KeywordTabBar, Avatar, EmptyState, StatusBadge, ThemedButton
   tests/                      # QtTest, stubbed HttpClient — port the Mac suite's coverage
   packaging/
-    flatpak/com.urlxl.LlamaMail.json (+ metainfo, .desktop, icons)
+    flatpak/com.urlxl.mail.json (+ metainfo, .desktop, icons)
     click/ (clickable.yaml, manifest.json, apparmor, .desktop, urls hook)
   po/                         # gettext catalogs seeded from Localizable.xcstrings keys
 ```
@@ -422,3 +422,18 @@ tests under both Qt majors).
     KUnifiedPush client support exists). MFA stays polling-driven everywhere.
 13. **Deployment lag**: no live E2E until the UnifiedPush backend commits are
     deployed on the user's Docker host.
+
+## Post-audit cleanup backlog (2026-07-17)
+
+1. **Fix Flatpak packaging.** `packaging/flatpak/com.urlxl.mail.json`
+   currently fails to build (`Could NOT find Qt6WebEngineQuick`, see risk #9)
+   and isn't exercised by CI — it has never produced a runnable artifact.
+   Resolve the `io.qt.qtwebengine.BaseApp` dependency so the manifest
+   actually builds, then wire a `flatpak-builder` job into CI so this stops
+   silently rotting.
+2. **Fix `ContactListModel::SyncedRole`.** The `rev != 0` heuristic
+   (`app/contacts/ContactListModel.h`) needs 30+ lines of comments to justify
+   itself — "can't distinguish pending-update-not-yet-pushed", "breaks if the
+   server ever returns rev==0 for a fresh object". Code that takes that much
+   prose to defend is wrong. Replace it with an explicit synced/pending field
+   sourced from the sync layer instead of inferring state from `rev`.

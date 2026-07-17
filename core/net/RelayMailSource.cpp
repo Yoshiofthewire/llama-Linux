@@ -4,32 +4,10 @@
 #include "net/RelayAuth.h"
 
 #include <QJsonArray>
-#include <QJsonDocument>
 #include <QJsonObject>
-#include <QJsonParseError>
 #include <QJsonValue>
 
 namespace {
-
-// Appends the given API path to serverBaseUrl, mirroring ContactSyncClient's
-// endpointFor -- preserves any existing path on serverBaseUrl and ensures
-// exactly one slash between the two, regardless of whether the caller's base
-// URL was given with or without a trailing slash.
-QUrl endpointFor(const QUrl& serverBaseUrl, const QString& apiPath)
-{
-    QUrl url = serverBaseUrl;
-    QString path = url.path();
-    if (!path.endsWith(QLatin1Char('/')))
-        path += QLatin1Char('/');
-    path += apiPath;
-    url.setPath(path);
-    return url;
-}
-
-QJsonDocument parseBody(const QByteArray& body, QJsonParseError* parseError)
-{
-    return QJsonDocument::fromJson(body, parseError);
-}
 
 // Maps one wire inbox item -- {messageId, sender, sentTo, cc, bcc, subject,
 // body, status, atUtc, hasAttachments, label, detail?, changeType?} -- onto
@@ -59,14 +37,6 @@ InboxEmailItem inboxItemFromJson(const QJsonObject& obj)
     if (obj.contains(QStringLiteral("changeType")))
         item.changeType = obj.value(QStringLiteral("changeType")).toString();
 
-    return item;
-}
-
-MailFolderItem folderItemFromJson(const QJsonObject& obj)
-{
-    MailFolderItem item;
-    item.path = obj.value(QStringLiteral("path")).toString();
-    item.deletable = obj.value(QStringLiteral("deletable")).toBool();
     return item;
 }
 
@@ -135,7 +105,8 @@ InboxFetchResult RelayMailSource::fetchInbox(const QUrl& serverBaseUrl, const Re
     if (since.has_value())
         query.append({ QStringLiteral("since"), QString::number(*since) });
 
-    const HttpClient::HttpResult result = m_httpClient.get(endpointFor(serverBaseUrl, QStringLiteral("api/inbox")), query);
+    const HttpClient::HttpResult result =
+        m_httpClient.get(joinUrlPath(serverBaseUrl, QStringLiteral("api/inbox")), query);
 
     InboxFetchResult out;
     if (result.error.has_value()) {
@@ -145,15 +116,15 @@ InboxFetchResult RelayMailSource::fetchInbox(const QUrl& serverBaseUrl, const Re
         return out;
     }
 
-    QJsonParseError parseError{};
-    const QJsonDocument doc = parseBody(result.body, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+    QString errorString;
+    const std::optional<QJsonObject> decoded = decodeJsonObject(result.body, &errorString);
+    if (!decoded.has_value()) {
         out.error = NetworkError::Decoding;
-        out.detail = QStringLiteral("Failed to decode inbox response: %1").arg(parseError.errorString());
+        out.detail = QStringLiteral("Failed to decode inbox response: %1").arg(errorString);
         return out;
     }
 
-    const QJsonObject json = doc.object();
+    const QJsonObject json = *decoded;
     for (const QJsonValue& tab : json.value(QStringLiteral("tabs")).toArray())
         out.tabs.append(tab.toString());
 
@@ -178,143 +149,6 @@ InboxFetchResult RelayMailSource::fetchInbox(const QUrl& serverBaseUrl, const Re
     return out;
 }
 
-ListFoldersResult RelayMailSource::listFolders(const QUrl& serverBaseUrl, const RelayAuth& auth,
-                                                const QString& parent) const
-{
-    QList<QPair<QString, QString>> query = auth.queryItems();
-    query.append({ QStringLiteral("parent"), parent });
-
-    const HttpClient::HttpResult result =
-        m_httpClient.get(endpointFor(serverBaseUrl, QStringLiteral("api/inbox/folders")), query);
-
-    ListFoldersResult out;
-    if (result.error.has_value()) {
-        out.error = result.error;
-        out.detail = !result.detail.isEmpty()
-            ? result.detail
-            : QStringLiteral("Folder list failed with status %1").arg(result.statusCode);
-        return out;
-    }
-
-    QJsonParseError parseError{};
-    const QJsonDocument doc = parseBody(result.body, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
-        out.error = NetworkError::Decoding;
-        out.detail = QStringLiteral("Failed to decode folder list response: %1").arg(parseError.errorString());
-        return out;
-    }
-
-    const QJsonObject json = doc.object();
-    out.parent = json.value(QStringLiteral("parent")).toString();
-    for (const QJsonValue& value : json.value(QStringLiteral("folders")).toArray())
-        out.folders.append(folderItemFromJson(value.toObject()));
-
-    return out;
-}
-
-CreateFolderResult RelayMailSource::createFolder(const QUrl& serverBaseUrl, const RelayAuth& auth,
-                                                   const QString& parent, const QString& name) const
-{
-    QJsonObject body;
-    body[QStringLiteral("parent")] = parent;
-    body[QStringLiteral("name")] = name;
-
-    const HttpClient::HttpResult result =
-        m_httpClient.post(endpointFor(serverBaseUrl, QStringLiteral("api/inbox/folders")), auth.queryItems(), body);
-
-    CreateFolderResult out;
-    if (result.error.has_value()) {
-        out.error = result.error;
-        out.detail = !result.detail.isEmpty()
-            ? result.detail
-            : QStringLiteral("Folder create failed with status %1").arg(result.statusCode);
-        return out;
-    }
-
-    QJsonParseError parseError{};
-    const QJsonDocument doc = parseBody(result.body, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
-        out.error = NetworkError::Decoding;
-        out.detail = QStringLiteral("Failed to decode folder create response: %1").arg(parseError.errorString());
-        return out;
-    }
-
-    const QJsonObject json = doc.object();
-    out.ok = json.value(QStringLiteral("ok")).toBool();
-    out.parent = json.value(QStringLiteral("parent")).toString();
-    out.name = json.value(QStringLiteral("name")).toString();
-    out.folder = json.value(QStringLiteral("folder")).toString();
-    return out;
-}
-
-RenameFolderResult RelayMailSource::renameFolder(const QUrl& serverBaseUrl, const RelayAuth& auth,
-                                                   const QString& folder, const QString& name) const
-{
-    QJsonObject body;
-    body[QStringLiteral("folder")] = folder;
-    body[QStringLiteral("name")] = name;
-
-    const HttpClient::HttpResult result =
-        m_httpClient.put(endpointFor(serverBaseUrl, QStringLiteral("api/inbox/folders")), auth.queryItems(), body);
-
-    RenameFolderResult out;
-    if (result.error.has_value()) {
-        out.error = result.error;
-        out.detail = !result.detail.isEmpty()
-            ? result.detail
-            : QStringLiteral("Folder rename failed with status %1").arg(result.statusCode);
-        return out;
-    }
-
-    QJsonParseError parseError{};
-    const QJsonDocument doc = parseBody(result.body, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
-        out.error = NetworkError::Decoding;
-        out.detail = QStringLiteral("Failed to decode folder rename response: %1").arg(parseError.errorString());
-        return out;
-    }
-
-    const QJsonObject json = doc.object();
-    out.ok = json.value(QStringLiteral("ok")).toBool();
-    out.folder = json.value(QStringLiteral("folder")).toString();
-    out.renamed = json.value(QStringLiteral("renamed")).toString();
-    out.parent = json.value(QStringLiteral("parent")).toString();
-    return out;
-}
-
-DeleteFolderResult RelayMailSource::deleteFolder(const QUrl& serverBaseUrl, const RelayAuth& auth,
-                                                   const QString& folder) const
-{
-    QList<QPair<QString, QString>> query = auth.queryItems();
-    query.append({ QStringLiteral("folder"), folder });
-
-    const HttpClient::HttpResult result =
-        m_httpClient.del(endpointFor(serverBaseUrl, QStringLiteral("api/inbox/folders")), query);
-
-    DeleteFolderResult out;
-    if (result.error.has_value()) {
-        out.error = result.error;
-        out.detail = !result.detail.isEmpty()
-            ? result.detail
-            : QStringLiteral("Folder delete failed with status %1").arg(result.statusCode);
-        return out;
-    }
-
-    QJsonParseError parseError{};
-    const QJsonDocument doc = parseBody(result.body, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
-        out.error = NetworkError::Decoding;
-        out.detail = QStringLiteral("Failed to decode folder delete response: %1").arg(parseError.errorString());
-        return out;
-    }
-
-    const QJsonObject json = doc.object();
-    out.ok = json.value(QStringLiteral("ok")).toBool();
-    out.folder = json.value(QStringLiteral("folder")).toString();
-    out.parent = json.value(QStringLiteral("parent")).toString();
-    return out;
-}
-
 ActionResult RelayMailSource::performAction(const QUrl& serverBaseUrl, const RelayAuth& auth, const QString& action,
                                              const QStringList& messageIds, const QString& mailbox,
                                              const std::optional<QString>& targetMailbox) const
@@ -326,8 +160,8 @@ ActionResult RelayMailSource::performAction(const QUrl& serverBaseUrl, const Rel
     if (targetMailbox.has_value())
         body[QStringLiteral("targetMailbox")] = *targetMailbox;
 
-    const HttpClient::HttpResult result =
-        m_httpClient.post(endpointFor(serverBaseUrl, QStringLiteral("api/inbox/actions")), auth.queryItems(), body);
+    const HttpClient::HttpResult result = m_httpClient.post(
+        joinUrlPath(serverBaseUrl, QStringLiteral("api/inbox/actions")), auth.queryItems(), body);
 
     ActionResult out;
     if (result.error.has_value()) {
@@ -338,15 +172,15 @@ ActionResult RelayMailSource::performAction(const QUrl& serverBaseUrl, const Rel
         return out;
     }
 
-    QJsonParseError parseError{};
-    const QJsonDocument doc = parseBody(result.body, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+    QString errorString;
+    const std::optional<QJsonObject> decoded = decodeJsonObject(result.body, &errorString);
+    if (!decoded.has_value()) {
         out.error = NetworkError::Decoding;
-        out.detail = QStringLiteral("Failed to decode inbox action response: %1").arg(parseError.errorString());
+        out.detail = QStringLiteral("Failed to decode inbox action response: %1").arg(errorString);
         return out;
     }
 
-    const QJsonObject json = doc.object();
+    const QJsonObject json = *decoded;
     out.ok = json.value(QStringLiteral("ok")).toBool();
     out.action = json.value(QStringLiteral("action")).toString();
     out.processed = json.value(QStringLiteral("processed")).toInt();
@@ -380,8 +214,8 @@ SendMailResult RelayMailSource::sendMail(const QUrl& serverBaseUrl, const RelayA
     requestBody[QStringLiteral("mode")] = mode;
     requestBody[QStringLiteral("attachments")] = attachmentsJson;
 
-    const HttpClient::HttpResult result =
-        m_httpClient.post(endpointFor(serverBaseUrl, QStringLiteral("api/mail/send")), auth.queryItems(), requestBody);
+    const HttpClient::HttpResult result = m_httpClient.post(
+        joinUrlPath(serverBaseUrl, QStringLiteral("api/mail/send")), auth.queryItems(), requestBody);
 
     SendMailResult out;
     if (result.error.has_value()) {
@@ -391,15 +225,15 @@ SendMailResult RelayMailSource::sendMail(const QUrl& serverBaseUrl, const RelayA
         return out;
     }
 
-    QJsonParseError parseError{};
-    const QJsonDocument doc = parseBody(result.body, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+    QString errorString;
+    const std::optional<QJsonObject> decoded = decodeJsonObject(result.body, &errorString);
+    if (!decoded.has_value()) {
         out.error = NetworkError::Decoding;
-        out.detail = QStringLiteral("Failed to decode mail send response: %1").arg(parseError.errorString());
+        out.detail = QStringLiteral("Failed to decode mail send response: %1").arg(errorString);
         return out;
     }
 
-    const QJsonObject json = doc.object();
+    const QJsonObject json = *decoded;
     out.ok = json.value(QStringLiteral("ok")).toBool();
     out.sentSaved = json.value(QStringLiteral("sentSaved")).toBool();
     out.warning = json.value(QStringLiteral("warning")).toString();
@@ -414,7 +248,7 @@ ListAttachmentsResult RelayMailSource::listAttachments(const QUrl& serverBaseUrl
     query.append({ QStringLiteral("messageId"), messageId });
 
     const HttpClient::HttpResult result =
-        m_httpClient.get(endpointFor(serverBaseUrl, QStringLiteral("api/mail/attachments")), query);
+        m_httpClient.get(joinUrlPath(serverBaseUrl, QStringLiteral("api/mail/attachments")), query);
 
     ListAttachmentsResult out;
     if (result.error.has_value()) {
@@ -425,15 +259,15 @@ ListAttachmentsResult RelayMailSource::listAttachments(const QUrl& serverBaseUrl
         return out;
     }
 
-    QJsonParseError parseError{};
-    const QJsonDocument doc = parseBody(result.body, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+    QString errorString;
+    const std::optional<QJsonObject> decoded = decodeJsonObject(result.body, &errorString);
+    if (!decoded.has_value()) {
         out.error = NetworkError::Decoding;
-        out.detail = QStringLiteral("Failed to decode attachment list response: %1").arg(parseError.errorString());
+        out.detail = QStringLiteral("Failed to decode attachment list response: %1").arg(errorString);
         return out;
     }
 
-    const QJsonObject json = doc.object();
+    const QJsonObject json = *decoded;
     for (const QJsonValue& value : json.value(QStringLiteral("attachments")).toArray())
         out.attachments.append(mailAttachmentInfoFromJson(value.toObject()));
 
@@ -450,7 +284,7 @@ DownloadAttachmentResult RelayMailSource::downloadAttachment(const QUrl& serverB
     query.append({ QStringLiteral("index"), QString::number(index) });
 
     const HttpClient::HttpResult result =
-        m_httpClient.get(endpointFor(serverBaseUrl, QStringLiteral("api/mail/attachment")), query);
+        m_httpClient.get(joinUrlPath(serverBaseUrl, QStringLiteral("api/mail/attachment")), query);
 
     DownloadAttachmentResult out;
     if (result.error.has_value()) {

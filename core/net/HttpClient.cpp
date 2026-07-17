@@ -2,6 +2,7 @@
 
 #include <QEventLoop>
 #include <QJsonDocument>
+#include <QJsonParseError>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -116,4 +117,39 @@ HttpClient::HttpResult HttpClient::waitForReply(QNetworkReply* reply) const
 
     reply->deleteLater();
     return result;
+}
+
+QUrl joinUrlPath(const QUrl& baseUrl, const QString& apiPath)
+{
+    QUrl url = baseUrl;
+    QString path = url.path();
+    if (!path.endsWith(QLatin1Char('/')))
+        path += QLatin1Char('/');
+    path += apiPath;
+    url.setPath(path);
+    return url;
+}
+
+std::optional<QJsonObject> decodeJsonObject(const QByteArray& body, QString* errorString)
+{
+    QJsonParseError parseError{};
+    const QJsonDocument doc = QJsonDocument::fromJson(body, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+        if (errorString)
+            *errorString = parseError.errorString();
+        return std::nullopt;
+    }
+    return doc.object();
+}
+
+std::optional<QJsonArray> decodeJsonArray(const QByteArray& body, QString* errorString)
+{
+    QJsonParseError parseError{};
+    const QJsonDocument doc = QJsonDocument::fromJson(body, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !doc.isArray()) {
+        if (errorString)
+            *errorString = parseError.errorString();
+        return std::nullopt;
+    }
+    return doc.array();
 }

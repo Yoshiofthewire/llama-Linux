@@ -9,6 +9,7 @@
 class ContactSyncRepository;
 class GroupsRepository;
 class ContactPhotoRepository;
+class Contact;
 
 // QML-facing bridge (Task 33) over core/domain's ContactSyncRepository.
 // Registered as the "ContactsApp" QML singleton in main.cpp. Every method
@@ -81,6 +82,14 @@ public:
 public slots:
     void load(); // refreshes the model from repository.contacts(), no network call
     void sync(); // calls repository.sync(), maps ContactSyncOutcome.status to statusMessage/lastError, reloads model on Success
+
+    // Calls repository.dedupe(). On Success with mergedCount > 0, chains
+    // into sync() (one layer up from repository.dedupe()'s own "does not
+    // call sync() itself" rule) to pull the resulting tombstones/survivor
+    // update and reload the model -- matching the Android/Mac reference
+    // clients' own controller-level chaining for this feature. On Success
+    // with mergedCount == 0, just reloads the model ("No duplicates found").
+    void dedupe();
     QVariantMap contactAt(const QString& uid); // full Contact struct as a QVariantMap (all fields incl. nested emails/phones/addresses as QVariantList of QVariantMap) for the edit form -- returns {} if not found
     QString createContact(const QVariantMap& fields); // builds a Contact from fields, calls repository.queueCreate(), returns the new local uid ("" on rejection)
     bool updateContact(const QString& uid, const QVariantMap& fields); // loads existing Contact via repository.contacts()/find-by-uid, applies fields, calls repository.queueUpdate(); returns false if uid not found or fn blank
@@ -110,6 +119,20 @@ public slots:
     // never needs to distinguish them for QML.
     QString photoPathFor(const QString& uid);
 
+    // Compose autocomplete: filters m_repository.contacts() in-memory
+    // (case-insensitive substring against fn and every emails[].value) --
+    // not a new ContactDao SQL query, since the full contact list is
+    // already loaded for ContactListModel and a realistic address book here
+    // is hundreds of rows, not worth a second data-access path. One result
+    // per MATCHED EMAIL, not per contact -- {uid, name, email, department}
+    // -- since a contact with two matching emails is two distinct
+    // addressable candidates. Prefix/exact matches (name or email starting
+    // with the trimmed, case-folded query) are ranked before
+    // substring-elsewhere matches; ties keep contacts() iteration order.
+    // limit <= 0 means unbounded (the address-book picker's "browse
+    // everything" mode); an empty query matches every contact/email pair.
+    Q_INVOKABLE QVariantList searchContacts(const QString& query, int limit = 5);
+
 signals:
     void isBusyChanged();
     void lastErrorChanged();
@@ -119,6 +142,10 @@ private:
     void setBusy(bool busy);
     void setLastError(const QString& error);
     void setStatusMessage(const QString& message);
+    // Shared body of createContact/updateContact: populates every
+    // non-fn/non-identity field of `contact` from `fields`. See the .cpp
+    // definition for the emails/phones "existing" base-value note.
+    void applyFieldsToContact(Contact& contact, const QVariantMap& fields) const;
 
     ContactSyncRepository& m_repository;
     GroupsRepository& m_groupsRepository;

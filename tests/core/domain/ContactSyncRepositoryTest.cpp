@@ -32,6 +32,10 @@ private slots:
     void tooOldResetsCursorAndCache();
     void findByUidReturnsContactWhenPresent();
     void findByUidReturnsNulloptWhenAbsent();
+    void dedupeWithoutPairingReturnsNotPaired();
+    void dedupeSuccessReturnsMergedCountAndGroupsWithoutTouchingCache();
+    void dedupeUnauthorizedFrom401MapsStatus();
+    void dedupeServiceUnavailableFrom503MapsStatus();
 
 private:
     static void savePairing(PairingStore& pairingStore, quint16 port);
@@ -412,6 +416,138 @@ void ContactSyncRepositoryTest::findByUidReturnsNulloptWhenAbsent()
     ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
 
     QVERIFY(!repository.findByUid(QStringLiteral("does-not-exist")).has_value());
+}
+
+void ContactSyncRepositoryTest::dedupeWithoutPairingReturnsNotPaired()
+{
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore); // never saved -- not paired
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+
+    const ContactDedupeOutcome outcome = repository.dedupe();
+    QCOMPARE(outcome.status, ContactDedupeStatus::NotPaired);
+}
+
+void ContactSyncRepositoryTest::dedupeSuccessReturnsMergedCountAndGroupsWithoutTouchingCache()
+{
+    FakeRelayServer fake(httpResponse(
+        200, "OK", R"({"mergedCount":1,"groups":[{"survivor":"srv-1","absorbed":["srv-2"]}]})"));
+
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    Contact existing;
+    existing.uid = QStringLiteral("srv-1");
+    existing.fn = QStringLiteral("Ada");
+    QVERIFY(contactDao.insertOrReplace(existing));
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+    savePairing(pairingStore, fake.port());
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+
+    const ContactDedupeOutcome outcome = repository.dedupe();
+    QCOMPARE(outcome.status, ContactDedupeStatus::Success);
+    QCOMPARE(outcome.mergedCount, 1);
+    QCOMPARE(outcome.groups.size(), 1);
+    QCOMPARE(outcome.groups.at(0).survivor, QStringLiteral("srv-1"));
+    QCOMPARE(outcome.groups.at(0).absorbed, (QVector<QString>{QStringLiteral("srv-2")}));
+
+    QVERIFY(fake.receivedRequest().contains("POST /api/contacts/dedupe?"));
+
+    // dedupe() must not touch the local cache -- that's sync()'s job on a
+    // subsequent call.
+    const QVector<Contact> all = contactDao.findAll();
+    QCOMPARE(all.size(), 1);
+    QCOMPARE(all.at(0).uid, QStringLiteral("srv-1"));
+    QCOMPARE(*all.at(0).fn, QStringLiteral("Ada"));
+}
+
+void ContactSyncRepositoryTest::dedupeUnauthorizedFrom401MapsStatus()
+{
+    FakeRelayServer fake(httpResponse(401, "Unauthorized", "Unauthorized\n"));
+
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+    savePairing(pairingStore, fake.port());
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+
+    const ContactDedupeOutcome outcome = repository.dedupe();
+    QCOMPARE(outcome.status, ContactDedupeStatus::Unauthorized);
+}
+
+void ContactSyncRepositoryTest::dedupeServiceUnavailableFrom503MapsStatus()
+{
+    FakeRelayServer fake(httpResponse(503, "Service Unavailable", "down\n"));
+
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+    savePairing(pairingStore, fake.port());
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+
+    const ContactDedupeOutcome outcome = repository.dedupe();
+    QCOMPARE(outcome.status, ContactDedupeStatus::ServiceUnavailable);
 }
 
 QTEST_GUILESS_MAIN(ContactSyncRepositoryTest)

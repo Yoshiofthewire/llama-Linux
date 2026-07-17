@@ -2,9 +2,7 @@
 
 #include "net/HttpClient.h"
 
-#include <QJsonDocument>
 #include <QJsonObject>
-#include <QJsonParseError>
 
 namespace {
 
@@ -69,15 +67,15 @@ NativeRegistrationResult NativeRegistrationClient::registerDevice(
         }
     }
 
-    QJsonParseError parseError{};
-    const QJsonDocument doc = QJsonDocument::fromJson(result.body, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+    QString errorString;
+    const std::optional<QJsonObject> decoded = decodeJsonObject(result.body, &errorString);
+    if (!decoded.has_value()) {
         out.outcome = RegistrationOutcome::Failure;
-        out.detail = QStringLiteral("Failed to decode registration response: %1").arg(parseError.errorString());
+        out.detail = QStringLiteral("Failed to decode registration response: %1").arg(errorString);
         return out;
     }
 
-    const QJsonObject json = doc.object();
+    const QJsonObject json = *decoded;
     NativeRegistrationResponse response;
     response.ok = json.value(QStringLiteral("ok")).toBool();
     response.synced = json.value(QStringLiteral("synced")).toBool();

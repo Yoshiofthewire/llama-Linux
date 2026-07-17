@@ -2,6 +2,7 @@
 
 #include "domain/ContactSyncReconciliation.h"
 #include "models/Contact.h"
+#include "net/ContactSyncClient.h" // for ContactDedupeGroup, held by value in ContactDedupeOutcome
 
 #include <QString>
 #include <QVector>
@@ -35,6 +36,16 @@ struct ContactSyncOutcome
     // references away from a temp uid that's now dead in the local cache.
     // Empty on any early-return path (NotPaired, network error, tooOld).
     QVector<ContactReconciliationAssignment> uidReassignments;
+};
+
+enum class ContactDedupeStatus { Success, NotPaired, Unauthorized, ServiceUnavailable, Retry };
+
+struct ContactDedupeOutcome
+{
+    ContactDedupeStatus status = ContactDedupeStatus::Retry;
+    int mergedCount = 0;                  // meaningful only when status == Success
+    QVector<ContactDedupeGroup> groups;    // meaningful only when status == Success
+    QString detail;                        // meaningful when status != Success
 };
 
 // Sits between ContactSyncClient and ContactDao/PendingContactChangeDao,
@@ -76,6 +87,12 @@ public:
     void queueDelete(const QString& uid, qint64 rev);
 
     ContactSyncOutcome sync();
+
+    // Single-purpose, like sync() -- one HTTP action, does not call sync()
+    // itself. The local cache (ContactDao/PendingContactChangeDao) is
+    // untouched by this call; callers that want the resulting tombstones/
+    // survivor updates reflected locally must call sync() separately.
+    ContactDedupeOutcome dedupe();
 
 private:
     ContactSyncClient& m_client;

@@ -1,7 +1,7 @@
 [Global]
 IconName=mail-unread
-Name=Llama Mail
-Comment=Llama Mail notifications
+Name=KyPost
+Comment=KyPost notifications
 
 [Event/newMail]
 Name=New Mail

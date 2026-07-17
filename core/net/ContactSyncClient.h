@@ -46,6 +46,31 @@ struct ContactSyncResult
     QVector<Contact> deletedContacts;
 };
 
+// One merged group from a dedupe pass -- survivor is the uid that absorbed
+// the others, absorbed is the list of now-tombstoned loser uids. Matches the
+// Go backend's DedupeMerge{Survivor, Absorbed} (internal/contacts/store.go).
+struct ContactDedupeGroup
+{
+    QString survivor;
+    QVector<QString> absorbed;
+
+    bool operator==(const ContactDedupeGroup&) const = default;
+};
+
+// Response from POST {serverBaseUrl}/api/contacts/dedupe -- the Go backend's
+// DedupeReport{MergedCount, Groups}. mergedCount is the total number of
+// tombstoned losers across every group; groups is empty (not an error) when
+// nothing merged. This call does not itself return the resulting Contact
+// changes -- callers must pull()/push() separately to fetch the tombstones
+// and survivor updates, same as any other server-side mutation.
+struct ContactDedupeResult
+{
+    std::optional<NetworkError> error;
+    QString detail; // human-readable detail on error; empty otherwise
+    int mergedCount = 0;
+    QVector<ContactDedupeGroup> groups;
+};
+
 // Syncs contacts with the Relay backend via GET/POST {serverBaseUrl}/api/
 // contacts/sync, verified against internal/api/contacts_handlers.go's
 // handleContactsSync and internal/contacts/contacts.go's Contact/
@@ -66,6 +91,11 @@ public:
     // special sentinel needed.
     ContactSyncResult push(const QUrl& serverBaseUrl, const RelayAuth& auth, qint64 baseCursor,
                             const QVector<Contact>& changes) const;
+
+    // POST {serverBaseUrl}/api/contacts/dedupe, empty body, sub/hash as query
+    // params (same withMailAuth shape pull()/push() already use). A strict
+    // subset of parseSyncResponse's job -- no changed/deleted arrays to walk.
+    ContactDedupeResult dedupe(const QUrl& serverBaseUrl, const RelayAuth& auth) const;
 
 private:
     HttpClient& m_httpClient;

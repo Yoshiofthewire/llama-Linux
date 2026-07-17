@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
-Name=Llama Mail
+Name=KyPost
 Exec=llamamail %u
-Icon=com.urlxl.LlamaMail
+Icon=com.urlxl.mail
 Categories=Network;Email;
 MimeType=x-scheme-handler/llamalabels;

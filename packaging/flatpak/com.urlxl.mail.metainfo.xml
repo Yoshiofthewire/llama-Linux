@@ -1,21 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Task 46: AppStream metainfo for the Flatpak/desktop packaging of Llama
-     Mail. Installed to ${CMAKE_INSTALL_DATADIR}/metainfo by app/CMakeLists.txt
+<!-- Task 46: AppStream metainfo for the Flatpak/desktop packaging of KyPost.
+     Installed to ${CMAKE_INSTALL_DATADIR}/metainfo by app/CMakeLists.txt
      (same install(FILES ...) pattern as the icon/desktop/service/notifyrc
      rules from Tasks 44-45). Validate with "appstreamcli validate" and the
      "no net" flag, targeting this file's path.
 -->
 <component type="desktop-application">
-  <id>com.urlxl.LlamaMail</id>
+  <id>com.urlxl.mail</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-2.0-only</project_license>
 
-  <name>Llama Mail</name>
+  <name>KyPost</name>
   <summary>Relay-based email client for KDE Plasma and Plasma Mobile</summary>
 
   <description>
     <p>
-      Llama Mail is a relay-only email client for KDE Plasma and Plasma
+      KyPost is a relay-only email client for KDE Plasma and Plasma
       Mobile. It does not speak IMAP or SMTP directly; instead, all mail and
       contacts sync through the mail.urlxl.com relay backend, which also
       brokers device pairing and push notifications over UnifiedPush.
@@ -30,7 +30,7 @@
     </p>
   </description>
 
-  <launchable type="desktop-id">com.urlxl.LlamaMail.desktop</launchable>
+  <launchable type="desktop-id">com.urlxl.mail.desktop</launchable>
 
   <categories>
     <category>Network</category>

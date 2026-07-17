@@ -33,6 +33,10 @@ const QHash<QString, ThemePalette>& allPalettes()
          ThemePalette{0x142018, 0x1F2F24, 0xC7DBC7, 0xE3F0DF, 0x8FAA74, 0x3A5837, 0x4F694F}},
         {QStringLiteral("Sun"),
          ThemePalette{0xFFF3DC, 0xFFF9EC, 0x5A4024, 0x392611, 0xE0AB4F, 0xF1D9A2, 0xD4B27A}},
+        {QStringLiteral("Patina Ky"),
+         ThemePalette{0x0D0F14, 0x161A22, 0x64748B, 0xE2E8F0, 0x4DEEEA, 0x0E4A48, 0x1E293B}},
+        {QStringLiteral("Polished Ky"),
+         ThemePalette{0xEEF2F6, 0xFFFFFF, 0x475569, 0x0F172A, 0x0891B2, 0xCFFAFE, 0xCBD5E1}},
     };
     return palettes;
 }
@@ -57,12 +61,14 @@ QStringList themeNames()
         QStringLiteral("Sky"),
         QStringLiteral("Forest"),
         QStringLiteral("Sun"),
+        QStringLiteral("Patina Ky"),
+        QStringLiteral("Polished Ky"),
     };
 }
 
 QString defaultThemeName()
 {
-    return QStringLiteral("Dark Matter");
+    return QStringLiteral("Patina Ky");
 }
 
 ThemePalette palette(const QString& name)

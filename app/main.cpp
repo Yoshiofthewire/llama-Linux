@@ -2,6 +2,8 @@
 #include "mail/MailController.h"
 #include "pairing/MfaController.h"
 #include "pairing/PairingController.h"
+#include "pgp/PgpQrController.h"
+#include "pgp/PgpQrScanner.h"
 #include "platform/SecureStoreKeychain.h"
 #include "push/NotificationDispatcher.h"
 #include "push/NtfyTopicProvisioner.h"
@@ -12,7 +14,6 @@
 #include "db/ContactDao.h"
 #include "db/Database.h"
 #include "db/EmailDao.h"
-#include "db/FolderDao.h"
 #include "db/GroupDao.h"
 #include "db/PendingContactChangeDao.h"
 #include "db/PushDao.h"
@@ -23,6 +24,7 @@
 #include "domain/KeywordRepository.h"
 #include "domain/MailRepository.h"
 #include "domain/PairingStore.h"
+#include "domain/PgpQrRepository.h"
 #include "domain/PushRepository.h"
 #include "domain/TransportStateMachine.h"
 #include "models/PushNotification.h"
@@ -33,6 +35,7 @@
 #include "net/MfaResponseClient.h"
 #include "net/NativeRegistrationClient.h"
 #include "net/NtfySubscriber.h"
+#include "net/PgpQrClient.h"
 #include "net/PushNotificationClient.h"
 #include "net/RelayMailSource.h"
 #include "stores/ContactPhotoCache.h"
@@ -147,11 +150,11 @@ int main(int argc, char* argv[])
 
     // Task 11: applicationName + organizationDomain feed KDBusService's name
     // derivation (reversed domain + app name -- see KDBusService::KDBusService
-    // docs), which must produce the same "com.urlxl.LlamaMail" well-known
+    // docs), which must produce the same "com.urlxl.mail" well-known
     // name that UnifiedPushConnector registers below and that the .service
-    // file at ~/.local/share/dbus-1/services/com.urlxl.LlamaMail.service
+    // file at ~/.local/share/dbus-1/services/com.urlxl.mail.service
     // advertises to the D-Bus daemon for on-demand activation.
-    app.setApplicationName(QStringLiteral("LlamaMail"));
+    app.setApplicationName(QStringLiteral("mail"));
     app.setOrganizationDomain(QStringLiteral("urlxl.com"));
 
     // Task 48: KI18n translation domain. Per KLocalizedString::
@@ -184,7 +187,7 @@ int main(int argc, char* argv[])
     // export D-Bus objects before the event loop (app.exec()) runs.
     //
     // Must also stay constructed before UnifiedPushConnector below: this is
-    // what actually claims the "com.urlxl.LlamaMail" well-known bus name on
+    // what actually claims the "com.urlxl.mail" well-known bus name on
     // the session bus. UnifiedPushConnector relies on that name already
     // being owned by this same connection by the time it constructs -- it
     // does not register the name itself. Reordering these two would make
@@ -247,7 +250,7 @@ int main(int argc, char* argv[])
     // singleton registers and loads cleanly.
     ThemeController themeController(settingsStore);
     qmlRegisterSingletonInstance<ThemeController>(
-        "com.urlxl.LlamaMail", 1, 0, "Theme", &themeController);
+        "com.urlxl.mail", 1, 0, "Theme", &themeController);
 
     // Task 31: composition root for the rest of core/db, core/net, and
     // core/domain -- every later Phase 6 task (32-34) builds its
@@ -277,13 +280,12 @@ int main(int argc, char* argv[])
     // logic is needed here).
     ContactPhotoCache contactPhotoCache(dataDir + QStringLiteral("/contact-photos"));
 
-    // 2. DAOs, each borrowing database.handle(). FolderDao/PushDao have no
+    // 2. DAOs, each borrowing database.handle(). PushDao has no
     // Phase 6 caller yet -- constructed anyway per the task-31 brief, since
-    // they're part of the schema Phase 2 already built and future phases
-    // will need them wired here rather than re-deriving this block.
+    // it's part of the schema Phase 2 already built and future phases
+    // will need it wired here rather than re-deriving this block.
     EmailDao emailDao(database.handle());
     ContactDao contactDao(database.handle());
-    FolderDao folderDao(database.handle());
     PushDao pushDao(database.handle());
     PendingContactChangeDao pendingContactChangeDao(database.handle());
     // extended-contact-fields Task 2: local name-cache for backend contact
@@ -293,9 +295,9 @@ int main(int argc, char* argv[])
 
     // 3. SecureStoreKeychain -- the app/platform/ Secret-Service-backed
     // SecureStore built in Phase 2 (SecureStoreFile is for tests/UT only).
-    // Reuses the same "com.urlxl.LlamaMail" service name KDBusService and
+    // Reuses the same "com.urlxl.mail" service name KDBusService and
     // UnifiedPushConnector already use above, for consistency.
-    SecureStoreKeychain secureStore(QStringLiteral("com.urlxl.LlamaMail"));
+    SecureStoreKeychain secureStore(QStringLiteral("com.urlxl.mail"));
 
     // 4. CursorStore -- reuses settingsDir (already computed for
     // SettingsStore above), not a second directory-resolution block.
@@ -322,6 +324,9 @@ int main(int argc, char* argv[])
     // extended-contact-fields Task 3: GET /api/contacts/{id}/photo, this
     // repo's second per-resource GET client -- see core/net/ContactPhotoClient.h.
     ContactPhotoClient contactPhotoClient(httpClient);
+    // PGP QR key exchange: talks to /api/pgp/qr/token and /api/pgp/qr/key --
+    // see core/net/PgpQrClient.h.
+    PgpQrClient pgpQrClient(httpClient);
 
     // 8. core/domain repositories -- the layer Tasks 32-34's QML-facing
     // controllers actually call into.
@@ -337,6 +342,11 @@ int main(int argc, char* argv[])
     // from sync()) -- see core/domain/ContactPhotoRepository.h's doc
     // comment.
     ContactPhotoRepository contactPhotoRepository(contactPhotoClient, contactPhotoCache, pairingStore);
+    // PGP QR key exchange: wraps only the "My QR Code" token-fetch side,
+    // which needs this device's own pairing resolved -- see
+    // core/domain/PgpQrRepository.h's doc comment for why the key-fetch
+    // side goes straight through pgpQrClient instead.
+    PgpQrRepository pgpQrRepository(pgpQrClient, pairingStore);
     ContactSyncRepository contactSyncRepository(contactSyncClient, contactDao, pendingContactChangeDao,
                                                  cursorStore, pairingStore);
     DeviceRegistrationService deviceRegistrationService(nativeRegistrationClient, pairingStore, settingsStore);
@@ -399,7 +409,7 @@ int main(int argc, char* argv[])
     // tradeoff as every other Phase 6 controller (see global constraint 2).
     MailController mailController(mailRepository, relayMailSource, keywordRepository, pairingStore);
     qmlRegisterSingletonInstance<MailController>(
-        "com.urlxl.LlamaMail", 1, 0, "MailApp", &mailController);
+        "com.urlxl.mail", 1, 0, "MailApp", &mailController);
 
     // Task 42: notification tap-through. NotificationDispatcher (Task 40,
     // already constructed above as part of the Task 41 push graph) emits
@@ -428,7 +438,19 @@ int main(int argc, char* argv[])
     // calls load()/sync() -- see ContactsController's constructor comment.
     ContactsController contactsController(contactSyncRepository, groupsRepository, contactPhotoRepository);
     qmlRegisterSingletonInstance<ContactsController>(
-        "com.urlxl.LlamaMail", 1, 0, "ContactsApp", &contactsController);
+        "com.urlxl.mail", 1, 0, "ContactsApp", &contactsController);
+
+    // PGP QR key exchange: QML-facing bridge over pgpQrRepository/
+    // pgpQrClient (both constructed above). Persistence of a scanned key
+    // onto a contact happens entirely in QML, gluing this singleton to
+    // ContactsApp -- see PgpQrController.h's doc comment.
+    PgpQrController pgpQrController(pgpQrRepository, pgpQrClient);
+    qmlRegisterSingletonInstance<PgpQrController>(
+        "com.urlxl.mail", 1, 0, "PgpQr", &pgpQrController);
+    // This repo's first creatable (non-singleton) QML-registered C++ type --
+    // PgpScanContactKey.qml instantiates one per scan screen, attaching it
+    // to the live VideoOutput's videoSink (see PgpQrScanner.h's doc comment).
+    qmlRegisterType<PgpQrScanner>("com.urlxl.mail", 1, 0, "PgpQrScanner");
 
     // Task 34: QML-facing bridge over deviceRegistrationService/pairingStore
     // (both constructed above). Refreshes its isPaired/pairedServerHost/
@@ -442,7 +464,7 @@ int main(int argc, char* argv[])
     // those three reuse pairingChanged() rather than a new signal.
     PairingController pairingController(deviceRegistrationService, pairingStore, settingsStore);
     qmlRegisterSingletonInstance<PairingController>(
-        "com.urlxl.LlamaMail", 1, 0, "Pairing", &pairingController);
+        "com.urlxl.mail", 1, 0, "Pairing", &pairingController);
 
     // Task 43 review-finding fix: rotate the ntfy topic (SecureStore
     // "ntfy-topic" key, see NtfyTopicProvisioner above) on every successful
@@ -485,7 +507,7 @@ int main(int argc, char* argv[])
     // constructed above).
     MfaController mfaController(mfaResponseClient, pairingStore);
     qmlRegisterSingletonInstance<MfaController>(
-        "com.urlxl.LlamaMail", 1, 0, "Mfa", &mfaController);
+        "com.urlxl.mail", 1, 0, "Mfa", &mfaController);
 
     QQmlApplicationEngine engine;
 
@@ -516,7 +538,7 @@ int main(int argc, char* argv[])
     // after every wiring connection below is already in place) is safe to
     // call on every startup -- KUnifiedPush persists registration state
     // itself.
-    UnifiedPushConnector pushConnector(QStringLiteral("com.urlxl.LlamaMail"));
+    UnifiedPushConnector pushConnector(QStringLiteral("com.urlxl.mail"));
 
     // Distributor-tier availability: only KUnifiedPush::Connector::Registered
     // means "available" (phase7-global-constraints.md item 5) -- Registering
@@ -654,7 +676,7 @@ int main(int argc, char* argv[])
                       });
     transportStateMachine.setForegrounded(app.applicationState() == Qt::ApplicationActive);
 
-    pushConnector.registerClient(QStringLiteral("Llama Mail push notifications"));
+    pushConnector.registerClient(QStringLiteral("KyPost push notifications"));
 
     return app.exec();
 }

@@ -1,7 +1,8 @@
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
-import com.urlxl.LlamaMail 1.0
+import com.urlxl.mail 1.0
 import "../components"
+import "../utils/format.js" as Format
 
 // Task 36 -- plain reusable Item, deliberately NOT a Kirigami.Page (see
 // Phase 6 global constraint 4): MobileRoot wraps this in a thin
@@ -19,6 +20,11 @@ Item {
     // rather than adding a second addRequested() signal that would carry no
     // real behavioral difference for whichever root ends up handling it.
     signal contactSelected(string uid)
+    // PGP QR key exchange: same "let the host decide how to navigate" shape
+    // as contactSelected() -- the host pushes/opens PgpScanContactKey.qml
+    // and, on a successful scan, creates a brand-new contact from it (see
+    // MobileRoot.qml/DesktopRoot.qml's wiring).
+    signal scanPgpKeyRequested()
 
     implicitWidth: 360
     implicitHeight: 640
@@ -31,22 +37,6 @@ Item {
     // implemented as a local visibility flag here rather than this file
     // reaching in and blanking properties it doesn't own.
     property bool showSyncStatus: false
-
-    // Same "up to 2 characters from whitespace-split name parts" shape as
-    // EmailDetail.qml's initialsFor() (Task 35) -- kept as a local helper
-    // rather than promoted anywhere shared: ContactDetail.qml needs the
-    // exact same logic but the two files have no other coupling, and this
-    // is a handful of lines, not something worth a shared JS module for.
-    function initialsFor(fn) {
-        const s = (fn || "").trim()
-        if (s.length === 0)
-            return "?"
-        const parts = s.split(/\s+/).filter(function (p) { return p.length > 0 })
-        let initials = ""
-        for (let i = 0; i < parts.length && initials.length < 2; i++)
-            initials += parts[i].charAt(0).toUpperCase()
-        return initials
-    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -77,6 +67,19 @@ Item {
                     root.showSyncStatus = true
                     syncStatusTimer.restart()
                 }
+            }
+            PrimaryButton {
+                text: i18n("Find Duplicates")
+                enabled: !ContactsApp.isBusy
+                onClicked: {
+                    ContactsApp.dedupe()
+                    root.showSyncStatus = true
+                    syncStatusTimer.restart()
+                }
+            }
+            GhostButton {
+                text: i18n("Scan PGP Key")
+                onClicked: root.scanPgpKeyRequested()
             }
         }
 
@@ -123,7 +126,7 @@ Item {
                     spacing: 12
 
                     Avatar {
-                        initials: root.initialsFor(model.fn)
+                        initials: Format.initialsFromName(model.fn)
                         // extended-contact-fields Task 3: lazy fetch on
                         // list-row become-visible -- ListView only
                         // instantiates delegates for (roughly) visible

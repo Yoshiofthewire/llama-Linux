@@ -10,7 +10,7 @@ class ThemeManagerTest : public QObject
     Q_OBJECT
 
 private slots:
-    void freshStoreDefaultsToDarkMatter();
+    void freshStoreDefaultsToPatinaKy();
     void setThemeUpdatesNameAndPalette();
     void setThemeIgnoresUnknownName();
     void persistenceRoundTripsAcrossManagers();
@@ -25,15 +25,15 @@ QString ThemeManagerTest::tempFilePath(QTemporaryDir& dir, const QString& name) 
     return dir.filePath(name);
 }
 
-void ThemeManagerTest::freshStoreDefaultsToDarkMatter()
+void ThemeManagerTest::freshStoreDefaultsToPatinaKy()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     SettingsStore store(tempFilePath(dir, QStringLiteral("settings.ini")));
 
     ThemeManager manager(store);
-    QCOMPARE(manager.themeName(), QStringLiteral("Dark Matter"));
-    QCOMPARE(manager.palette(), AppTheme::palette(QStringLiteral("Dark Matter")));
+    QCOMPARE(manager.themeName(), QStringLiteral("Patina Ky"));
+    QCOMPARE(manager.palette(), AppTheme::palette(QStringLiteral("Patina Ky")));
 }
 
 void ThemeManagerTest::setThemeUpdatesNameAndPalette()
@@ -86,8 +86,8 @@ void ThemeManagerTest::invalidPersistedThemeIdFallsBackToDefault()
     store.setThemeId(QStringLiteral("Bogus"));
 
     ThemeManager manager(store);
-    QCOMPARE(manager.themeName(), QStringLiteral("Dark Matter"));
-    QCOMPARE(manager.palette(), AppTheme::palette(QStringLiteral("Dark Matter")));
+    QCOMPARE(manager.themeName(), QStringLiteral("Patina Ky"));
+    QCOMPARE(manager.palette(), AppTheme::palette(QStringLiteral("Patina Ky")));
 }
 
 QTEST_GUILESS_MAIN(ThemeManagerTest)

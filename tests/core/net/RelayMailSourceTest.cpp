@@ -21,11 +21,6 @@ private slots:
     void fetchInboxOmitsLimitAndSinceWhenNotProvided();
     void fetchInboxUnauthorizedFrom401PassesErrorThrough();
 
-    void listFoldersSendsParentAndAuthAsQueryParamsAndParsesResult();
-    void createFolderSendsParentNameBodyAndParsesStringFolderResult();
-    void renameFolderSendsPutWithFolderNameBodyAndParsesResult();
-    void deleteFolderSendsDeleteWithFolderQueryParamNotBody();
-
     void performActionMoveIncludesTargetMailboxInRequestBody();
     void performActionReadOmitsTargetMailboxFromRequestBodyButResponseCarriesEmptyString();
 
@@ -181,117 +176,6 @@ void RelayMailSourceTest::fetchInboxUnauthorizedFrom401PassesErrorThrough()
     QVERIFY(result.error.has_value());
     QCOMPARE(*result.error, NetworkError::Unauthorized);
     QVERIFY(result.byTab.isEmpty());
-}
-
-void RelayMailSourceTest::listFoldersSendsParentAndAuthAsQueryParamsAndParsesResult()
-{
-    const QByteArray body = R"(
-    {
-      "parent": "Inbox",
-      "folders": [
-        {"path": "Inbox/Work", "deletable": true},
-        {"path": "Inbox/Personal", "deletable": false}
-      ]
-    }
-    )";
-    FakeRelayServer fake(httpResponse(200, "OK", body));
-    QNetworkAccessManager manager;
-    HttpClient http(manager);
-    RelayMailSource source(http);
-
-    const QUrl serverBaseUrl(QStringLiteral("http://127.0.0.1:%1").arg(fake.port()));
-    const RelayAuth auth{ QStringLiteral("sub-1"), QStringLiteral("hash-1") };
-    const ListFoldersResult result = source.listFolders(serverBaseUrl, auth, QStringLiteral("Inbox"));
-
-    QVERIFY(!result.error.has_value());
-    QCOMPARE(result.parent, QStringLiteral("Inbox"));
-    QCOMPARE(result.folders.size(), 2);
-    QCOMPARE(result.folders.at(0).path, QStringLiteral("Inbox/Work"));
-    QCOMPARE(result.folders.at(0).deletable, true);
-    QCOMPARE(result.folders.at(1).path, QStringLiteral("Inbox/Personal"));
-    QCOMPARE(result.folders.at(1).deletable, false);
-
-    const QByteArray request = fake.receivedRequest();
-    QVERIFY(request.contains("GET /api/inbox/folders?"));
-    QVERIFY(request.contains("parent=Inbox"));
-    QVERIFY(request.contains("sub=sub-1"));
-    QVERIFY(request.contains("hash=hash-1"));
-}
-
-void RelayMailSourceTest::createFolderSendsParentNameBodyAndParsesStringFolderResult()
-{
-    // POST response's "folder" key is a plain string path here (mailClient.
-    // CreateFolder returns (string, error)) -- NOT the {path, deletable}
-    // object shape used by the GET list response.
-    FakeRelayServer fake(
-        httpResponse(200, "OK", R"({"ok":true,"parent":"Inbox","name":"NewFolder","folder":"Inbox/NewFolder"})"));
-    QNetworkAccessManager manager;
-    HttpClient http(manager);
-    RelayMailSource source(http);
-
-    const QUrl serverBaseUrl(QStringLiteral("http://127.0.0.1:%1").arg(fake.port()));
-    const RelayAuth auth{ QStringLiteral("sub-1"), QStringLiteral("hash-1") };
-    const CreateFolderResult result =
-        source.createFolder(serverBaseUrl, auth, QStringLiteral("Inbox"), QStringLiteral("NewFolder"));
-
-    QVERIFY(!result.error.has_value());
-    QCOMPARE(result.ok, true);
-    QCOMPARE(result.parent, QStringLiteral("Inbox"));
-    QCOMPARE(result.name, QStringLiteral("NewFolder"));
-    QCOMPARE(result.folder, QStringLiteral("Inbox/NewFolder"));
-
-    QVERIFY(fake.receivedRequest().contains("POST /api/inbox/folders?"));
-    const QJsonObject sent = fake.receivedJsonBody();
-    QCOMPARE(sent.value(QStringLiteral("parent")).toString(), QStringLiteral("Inbox"));
-    QCOMPARE(sent.value(QStringLiteral("name")).toString(), QStringLiteral("NewFolder"));
-}
-
-void RelayMailSourceTest::renameFolderSendsPutWithFolderNameBodyAndParsesResult()
-{
-    FakeRelayServer fake(
-        httpResponse(200, "OK", R"({"ok":true,"folder":"Inbox/Old","renamed":"Inbox/New","parent":"Inbox"})"));
-    QNetworkAccessManager manager;
-    HttpClient http(manager);
-    RelayMailSource source(http);
-
-    const QUrl serverBaseUrl(QStringLiteral("http://127.0.0.1:%1").arg(fake.port()));
-    const RelayAuth auth{ QStringLiteral("sub-1"), QStringLiteral("hash-1") };
-    const RenameFolderResult result =
-        source.renameFolder(serverBaseUrl, auth, QStringLiteral("Inbox/Old"), QStringLiteral("New"));
-
-    QVERIFY(!result.error.has_value());
-    QCOMPARE(result.ok, true);
-    QCOMPARE(result.folder, QStringLiteral("Inbox/Old"));
-    QCOMPARE(result.renamed, QStringLiteral("Inbox/New"));
-    QCOMPARE(result.parent, QStringLiteral("Inbox"));
-
-    QVERIFY(fake.receivedRequest().contains("PUT /api/inbox/folders?"));
-    const QJsonObject sent = fake.receivedJsonBody();
-    QCOMPARE(sent.value(QStringLiteral("folder")).toString(), QStringLiteral("Inbox/Old"));
-    QCOMPARE(sent.value(QStringLiteral("name")).toString(), QStringLiteral("New"));
-}
-
-void RelayMailSourceTest::deleteFolderSendsDeleteWithFolderQueryParamNotBody()
-{
-    FakeRelayServer fake(httpResponse(200, "OK", R"({"ok":true,"folder":"Inbox/Old","parent":"Inbox"})"));
-    QNetworkAccessManager manager;
-    HttpClient http(manager);
-    RelayMailSource source(http);
-
-    const QUrl serverBaseUrl(QStringLiteral("http://127.0.0.1:%1").arg(fake.port()));
-    const RelayAuth auth{ QStringLiteral("sub-1"), QStringLiteral("hash-1") };
-    const DeleteFolderResult result = source.deleteFolder(serverBaseUrl, auth, QStringLiteral("Inbox/Old"));
-
-    QVERIFY(!result.error.has_value());
-    QCOMPARE(result.ok, true);
-    QCOMPARE(result.folder, QStringLiteral("Inbox/Old"));
-    QCOMPARE(result.parent, QStringLiteral("Inbox"));
-
-    const QByteArray request = fake.receivedRequest();
-    QVERIFY(request.contains("DELETE /api/inbox/folders?"));
-    QVERIFY(request.contains("folder="));
-    // The folder target travels as a query param, not a JSON body.
-    QVERIFY(!request.contains("Content-Length:"));
 }
 
 void RelayMailSourceTest::performActionMoveIncludesTargetMailboxInRequestBody()

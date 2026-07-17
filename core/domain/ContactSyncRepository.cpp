@@ -82,6 +82,21 @@ ContactSyncStatus statusFromNetworkError(NetworkError error)
     }
 }
 
+// Small, deliberately separate switch rather than sharing statusFromNetworkError
+// above -- ContactDedupeStatus and ContactSyncStatus are distinct enums, not
+// worth templatizing across for two five-line switches.
+ContactDedupeStatus dedupeStatusFromNetworkError(NetworkError error)
+{
+    switch (error) {
+    case NetworkError::Unauthorized:
+        return ContactDedupeStatus::Unauthorized;
+    case NetworkError::ServiceUnavailable:
+        return ContactDedupeStatus::ServiceUnavailable;
+    default:
+        return ContactDedupeStatus::Retry;
+    }
+}
+
 } // namespace
 
 ContactSyncRepository::ContactSyncRepository(ContactSyncClient& client, ContactDao& contactDao,
@@ -233,4 +248,21 @@ ContactSyncOutcome ContactSyncRepository::sync()
              ContactSyncSummary{ static_cast<int>(pending.size()), applied, result.cursor },
              QString(),
              assignments };
+}
+
+ContactDedupeOutcome ContactSyncRepository::dedupe()
+{
+    const std::optional<DevicePairing> pairing = m_pairingStore.load();
+    if (!pairing.has_value())
+        return { ContactDedupeStatus::NotPaired, 0, {}, QStringLiteral("Not paired") };
+
+    const RelayAuth auth{ pairing->subscriberId, pairing->subscriberHash };
+    const QUrl serverUrl(pairing->serverBaseUrl);
+
+    const ContactDedupeResult result = m_client.dedupe(serverUrl, auth);
+
+    if (result.error.has_value())
+        return { dedupeStatusFromNetworkError(*result.error), 0, {}, result.detail };
+
+    return { ContactDedupeStatus::Success, result.mergedCount, result.groups, QString() };
 }

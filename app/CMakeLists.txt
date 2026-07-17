@@ -60,19 +60,37 @@ target_sources(llamamail PRIVATE
   contacts/ContactsController.h
 )
 
-# NativeContactSyncRepository (Task 6) orchestrates one native-contacts
-# backend's sync pass against NativeContactsProvider (app/contacts/native/,
-# header-only interface -- no .cpp of its own, so not listed as a source
-# here) plus core/domain's ContactSyncRepository and core/db's
-# NativeContactLinkDao. Lives in app/, not llamacore, because the interface
-# it depends on will need QtDBus/Akonadi types (Tasks 7-8) that core/ must
-# never depend on -- same core/ boundary rule as ContactsController above.
-# No extra find_package needed: QCryptographicHash/QDateTime/QHash are
-# already part of Qt6::Core, transitively available via Qt6::Quick.
+# PgpQrController wraps core/domain's PgpQrRepository and core/net's
+# PgpQrClient as a QML singleton ("PgpQr") -- QObject/QVariant, so app/ per
+# the core/ boundary rule, same as ContactsController above.
+#
+# QR generation/scanning uses zxing-cpp (the "ZXing::ZXing" CMake target,
+# `find_package(ZXing CONFIG)`), not the originally-discussed QZXing: this
+# machine already has zxing-cpp installed (a KDE-ecosystem transitive
+# dependency of `prison`/gst-plugins-bad), it's actively maintained
+# (v3.1.0, Apache-2.0), and it ships a header-only Qt/QtMultimedia wrapper
+# (ZXing/ZXingQt.h) with both `Barcode::fromText(...).toImage()` (encode,
+# used by PgpQrController::myQrImageDataUrl()) and a ready-made
+# `ZXingQt::BarcodeReader` QObject (decode) that self-registers as QML type
+# "ZXing"/"BarcodeReader" the moment its header is compiled into this
+# binary with QT_QML_LIB defined (already true here via Qt6::Qml, linked
+# transitively through Qt6::Quick) -- no separate PgpQrScanner class or
+# manual qmlRegisterType needed, PgpScanContactKey.qml uses it directly.
+#
+# Unlike Qt5, there is no separate "MultimediaQuick" component in Qt6 --
+# Qt6::Multimedia alone ships the "QtMultimedia" QML plugin (Camera/
+# VideoOutput/MediaCaptureSession), auto-loaded by the QML engine at
+# runtime; confirmed no Qt6MultimediaQuickConfig.cmake exists, only a
+# private Qt6MultimediaQuickPrivate.
+find_package(ZXing CONFIG REQUIRED)
+find_package(Qt6 REQUIRED COMPONENTS Multimedia)
 target_sources(llamamail PRIVATE
-  contacts/native/NativeContactSyncRepository.cpp
-  contacts/native/NativeContactSyncRepository.h
+  pgp/PgpQrController.cpp
+  pgp/PgpQrController.h
+  pgp/PgpQrScanner.cpp
+  pgp/PgpQrScanner.h
 )
+target_link_libraries(llamamail PRIVATE ZXing::ZXing Qt6::Multimedia)
 
 # PairingController/MfaController (Task 34) wrap core/domain's
 # DeviceRegistrationService/PairingStore and core/net's MfaResponseClient as
@@ -137,7 +155,7 @@ target_sources(llamamail PRIVATE
 )
 
 # KDBusService (KF6DBusAddons) wraps app startup in main.cpp to claim the
-# com.urlxl.LlamaMail well-known bus name in Unique mode and emit
+# com.urlxl.mail well-known bus name in Unique mode and emit
 # activateRequested on duplicate-instance launches -- confirmed installed via
 # `pacman -Qs kdbusaddons`, providing the standard KDE convenience wrapper
 # over plain QDBusConnection registration for Task 11's D-Bus activation
@@ -166,56 +184,56 @@ install(TARGETS llamamail RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # Install app icon files (Task 44): scalable SVG + rasterized PNGs at
 # standard freedesktop hicolor theme sizes (16, 22, 24, 32, 48, 64, 128, 256 px).
-# com.urlxl.LlamaMail is the icon name referenced in the .desktop file.
+# com.urlxl.mail is the icon name referenced in the .desktop file.
 install(FILES
-  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/scalable/apps/com.urlxl.LlamaMail.svg
+  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/scalable/apps/com.urlxl.mail.svg
   DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
 )
 
 install(FILES
-  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/16x16/apps/com.urlxl.LlamaMail.png
+  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/16x16/apps/com.urlxl.mail.png
   DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/16x16/apps
 )
 
 install(FILES
-  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/22x22/apps/com.urlxl.LlamaMail.png
+  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/22x22/apps/com.urlxl.mail.png
   DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/22x22/apps
 )
 
 install(FILES
-  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/24x24/apps/com.urlxl.LlamaMail.png
+  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/24x24/apps/com.urlxl.mail.png
   DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/24x24/apps
 )
 
 install(FILES
-  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/32x32/apps/com.urlxl.LlamaMail.png
+  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/32x32/apps/com.urlxl.mail.png
   DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/32x32/apps
 )
 
 install(FILES
-  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/48x48/apps/com.urlxl.LlamaMail.png
+  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/48x48/apps/com.urlxl.mail.png
   DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/48x48/apps
 )
 
 install(FILES
-  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/64x64/apps/com.urlxl.LlamaMail.png
+  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/64x64/apps/com.urlxl.mail.png
   DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/64x64/apps
 )
 
 install(FILES
-  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/128x128/apps/com.urlxl.LlamaMail.png
+  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/128x128/apps/com.urlxl.mail.png
   DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/128x128/apps
 )
 
 install(FILES
-  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/256x256/apps/com.urlxl.LlamaMail.png
+  ${PROJECT_SOURCE_DIR}/packaging/flatpak/icons/hicolor/256x256/apps/com.urlxl.mail.png
   DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps
 )
 
 # Install desktop entry (Task 45): app metadata for the application menu and
 # D-Bus service activation.
 install(FILES
-  ${PROJECT_SOURCE_DIR}/packaging/flatpak/com.urlxl.LlamaMail.desktop
+  ${PROJECT_SOURCE_DIR}/packaging/flatpak/com.urlxl.mail.desktop
   DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
 )
 
@@ -223,7 +241,7 @@ install(FILES
 # (/usr/bin/llamamail) is only correct once make install puts the binary
 # there, which is now the case for real system installs.
 install(FILES
-  ${PROJECT_SOURCE_DIR}/packaging/dbus/com.urlxl.LlamaMail.service
+  ${PROJECT_SOURCE_DIR}/packaging/dbus/com.urlxl.mail.service
   DESTINATION ${CMAKE_INSTALL_DATADIR}/dbus-1/services
 )
 
@@ -238,6 +256,6 @@ install(FILES
 # summary, description, categories, release history) consumed by app
 # stores/software centers such as KDE Discover and GNOME Software.
 install(FILES
-  ${PROJECT_SOURCE_DIR}/packaging/flatpak/com.urlxl.LlamaMail.metainfo.xml
+  ${PROJECT_SOURCE_DIR}/packaging/flatpak/com.urlxl.mail.metainfo.xml
   DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo
 )

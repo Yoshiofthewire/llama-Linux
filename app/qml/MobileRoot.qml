@@ -2,9 +2,10 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import org.kde.kirigami 2.20 as Kirigami
-import com.urlxl.LlamaMail 1.0
+import com.urlxl.mail 1.0
 import "components"
 import "pages"
+import "utils/format.js" as Format
 
 // Task 38 -- top-level mobile navigation shell, replacing the Task 1 stub.
 // Kirigami.ApplicationWindow + pageStack (Kirigami.PageRow, single-column
@@ -13,17 +14,13 @@ import "pages"
 // Pairing (Tasks 35-37's plain-Item page components) are pushed wrapped in
 // a thin Kirigami.Page shell -- those files are deliberately NOT
 // Kirigami.Page themselves so DesktopRoot (Task 39) can embed them
-// directly instead. MfaApproval.qml is intentionally left unrouted here:
-// its own doc comment says its only real trigger (a notification tap) is a
-// later-phase feature, and this task's brief doesn't ask for a dev entry
-// point into it (Task 37's own manual-verification harness for it was
-// fully reverted before that commit).
+// directly instead.
 Kirigami.ApplicationWindow {
     id: root
     width: 360
     height: 640
     visible: true
-    title: "Llama Mail" // product name -- not translated, same as Firefox/Thunderbird's own names
+    title: "KyPost" // product name -- not translated, same as Firefox/Thunderbird's own names
 
     // ---- bottom tab bar selection state --------------------------------
     // "inbox" | "contacts" -- Compose is action-only and deliberately never
@@ -241,6 +238,12 @@ Kirigami.ApplicationWindow {
                 onContactSelected: function (uid) {
                     root.pageStack.push(contactDetailPageComponent, { uid: uid })
                 }
+                // PGP QR key exchange: no existing form to write into here
+                // (this is the contacts list, not a specific contact) --
+                // pgpScanContactKeyPageComponent's targetContactDetail
+                // defaults to null, which its onKeyScanned handler treats
+                // as "create a brand-new contact from the scan".
+                onScanPgpKeyRequested: root.pageStack.push(pgpScanContactKeyPageComponent, {})
             }
         }
     }
@@ -254,9 +257,59 @@ Kirigami.ApplicationWindow {
             property string uid: ""
 
             ContactDetail {
+                id: contactDetailInner
                 anchors.fill: parent
                 uid: contactDetailPage.uid
                 onClosed: root.safePop()
+                // PGP QR key exchange: captures this still-open form
+                // instance so the pushed scan page can write the scanned
+                // key straight into it once confirmed (see
+                // pgpScanContactKeyPageComponent's onKeyScanned below) --
+                // nothing is persisted until the user hits this form's own
+                // Save button.
+                onScanPgpKeyRequested: root.pageStack.push(
+                    pgpScanContactKeyPageComponent, { targetContactDetail: contactDetailInner })
+            }
+        }
+    }
+
+    Component {
+        id: pgpMyQrCodePageComponent
+        Kirigami.Page {
+            objectName: "pgpMyQrCodePage"
+            title: i18n("My PGP QR Code")
+
+            PgpMyQrCode {
+                anchors.fill: parent
+                onClosed: root.safePop()
+            }
+        }
+    }
+
+    Component {
+        id: pgpScanContactKeyPageComponent
+        Kirigami.Page {
+            id: pgpScanContactKeyPage
+            objectName: "pgpScanContactKeyPage"
+            title: i18n("Scan Contact Key")
+            // Set by whichever entry point pushed this page -- null means
+            // "no form to write into, create a brand-new contact instead"
+            // (ContactsList's entry point); non-null means "write into this
+            // still-open ContactDetail form" (ContactDetail's own entry
+            // point, for filling in the key of the contact already being
+            // edited/created).
+            property var targetContactDetail: null
+
+            PgpScanContactKey {
+                anchors.fill: parent
+                onClosed: root.safePop()
+                onKeyScanned: function (name, publicKey) {
+                    if (pgpScanContactKeyPage.targetContactDetail)
+                        pgpScanContactKeyPage.targetContactDetail.applyScannedKey(name, publicKey)
+                    else
+                        ContactsApp.createContact({ fn: name, pgpKey: publicKey })
+                    root.safePop()
+                }
             }
         }
     }
@@ -290,13 +343,14 @@ Kirigami.ApplicationWindow {
             Settings {
                 anchors.fill: parent
                 onClosed: root.safePop()
+                onMyPgpQrCodeRequested: root.pageStack.push(pgpMyQrCodePageComponent)
             }
         }
     }
 
     // ---- global drawer (hamburger menu): Settings + Pair Device --------
     globalDrawer: Kirigami.GlobalDrawer {
-        title: "Llama Mail" // product name -- not translated, see ApplicationWindow.title above
+        title: "KyPost" // product name -- not translated, see ApplicationWindow.title above
         actions: [
             Kirigami.Action {
                 text: i18n("Pair Device")
@@ -370,28 +424,20 @@ Kirigami.ApplicationWindow {
         Component.onCompleted: MailApp.refresh()
 
         function currentFolderDisplayName() {
-            const folders = MailApp.standardFolders()
-            for (let i = 0; i < folders.length; i++) {
-                if (folders[i].wireName === MailApp.currentFolder)
-                    return folders[i].displayName
-            }
-            return MailApp.currentFolder
+            return Format.folderDisplayName(MailApp.standardFolders(), MailApp.currentFolder)
         }
 
         // Same "reasonable initials logic" shape as EmailDetail.qml's own
         // initialsFor() (Task 35) / ContactsList.qml's initialsFor() (Task
-        // 36) -- kept as a local duplicate here rather than promoted to a
-        // shared module, matching both of those files' own stated
-        // reasoning (a handful of lines, no other coupling between call
-        // sites).
+        // 36). The whitespace-split-to-initials core is shared
+        // (Format.initialsFromNamePart()); this wrapper keeps its own
+        // "Name <email>" parsing and "?" fallback on empty, since it
+        // doesn't need EmailDetail.qml's further email-local-part fallback.
         function initialsForSender(sender) {
             const s = sender || ""
             const lt = s.indexOf("<")
             const namePart = (lt !== -1 ? s.substring(0, lt) : s).trim()
-            const parts = namePart.split(/\s+/).filter(function (p) { return p.length > 0 })
-            let initials = ""
-            for (let i = 0; i < parts.length && initials.length < 2; i++)
-                initials += parts[i].charAt(0).toUpperCase()
+            const initials = Format.initialsFromNamePart(namePart)
             return initials.length > 0 ? initials : "?"
         }
 

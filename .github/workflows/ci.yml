@@ -41,7 +41,7 @@
 # libkf6dbusaddons-dev, libkf6i18n-dev, kunifiedpush-dev, and -- under a
 # different name than the brief guessed -- qtkeychain-qt6-dev (Qt6Keychain
 # 0.16.0 in this archive as of this check; the Flatpak manifate
-# `packaging/flatpak/com.urlxl.LlamaMail.json` separately pins 0.17.0 for
+# `packaging/flatpak/com.urlxl.mail.json` separately pins 0.17.0 for
 # its from-source build, a different mechanism for a different
 # distribution channel -- 0.16 vs 0.17 is not an ABI/API-breaking gap for
 # the calls SecureStoreKeychain.cpp makes).
@@ -105,7 +105,6 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             cmake \
             ninja-build \
-            extra-cmake-modules \
             gettext \
             qt6-base-dev \
             qt6-declarative-dev \
@@ -145,7 +144,7 @@ jobs:
 # keep it fast and secret-free... if flathub downloads make it too slow/
 # flaky for routine CI, skip it and note why in a comment, rather than
 # shipping a job that will flake on every PR." Skipping outright, for a
-# stronger reason than speed: `packaging/flatpak/com.urlxl.LlamaMail.json`
+# stronger reason than speed: `packaging/flatpak/com.urlxl.mail.json`
 # is currently *known* to fail deterministically, every single time, at the
 # `llamamail` module's CMake configure step -- documented in
 # task-47-report.md ("Could NOT find Qt6WebEngineQuick ... Failed to find

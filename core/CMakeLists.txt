@@ -24,6 +24,8 @@ add_library(llamacore STATIC
   domain/ContactSyncRepository.h
   domain/GroupsRepository.cpp
   domain/GroupsRepository.h
+  domain/PgpQrRepository.cpp
+  domain/PgpQrRepository.h
   domain/ContactPhotoRepository.cpp
   domain/ContactPhotoRepository.h
   domain/PushRepository.cpp
@@ -73,6 +75,8 @@ add_library(llamacore STATIC
   net/GroupsClient.h
   net/ContactPhotoClient.cpp
   net/ContactPhotoClient.h
+  net/PgpQrClient.cpp
+  net/PgpQrClient.h
   net/RelayMailSource.cpp
   net/RelayMailSource.h
   net/NtfySubscriber.cpp

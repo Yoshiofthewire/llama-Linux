@@ -4,26 +4,6 @@
 
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QJsonParseError>
-
-namespace {
-
-// Appends "api/mfa/push/respond" to serverBaseUrl's path, mirroring Swift's
-// URL.appending(path:) — preserves any existing path on serverBaseUrl and
-// ensures exactly one slash between the two, regardless of whether the
-// caller's base URL was given with or without a trailing slash.
-QUrl endpointFor(const QUrl& serverBaseUrl)
-{
-    QUrl url = serverBaseUrl;
-    QString path = url.path();
-    if (!path.endsWith(QLatin1Char('/')))
-        path += QLatin1Char('/');
-    path += QStringLiteral("api/mfa/push/respond");
-    url.setPath(path);
-    return url;
-}
-
-} // namespace
 
 MfaResponseClient::MfaResponseClient(HttpClient& httpClient)
     : m_httpClient(httpClient)
@@ -43,7 +23,8 @@ MfaResponseResult MfaResponseClient::respond(const QUrl& serverBaseUrl, const QS
 
     // No query-param auth on this endpoint, unlike every other Relay
     // endpoint in this batch — every credential rides in the JSON body.
-    const HttpClient::HttpResult result = m_httpClient.post(endpointFor(serverBaseUrl), {}, body);
+    const HttpClient::HttpResult result =
+        m_httpClient.post(joinUrlPath(serverBaseUrl, QStringLiteral("api/mfa/push/respond")), {}, body);
 
     MfaResponseResult out;
 
@@ -73,16 +54,15 @@ MfaResponseResult MfaResponseClient::respond(const QUrl& serverBaseUrl, const QS
         }
     }
 
-    QJsonParseError parseError{};
-    const QJsonDocument doc = QJsonDocument::fromJson(result.body, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+    QString errorString;
+    const std::optional<QJsonObject> json = decodeJsonObject(result.body, &errorString);
+    if (!json.has_value()) {
         out.outcome = MfaResponseOutcome::Failure;
-        out.detail = QStringLiteral("Failed to decode MFA response: %1").arg(parseError.errorString());
+        out.detail = QStringLiteral("Failed to decode MFA response: %1").arg(errorString);
         return out;
     }
 
-    const QJsonObject json = doc.object();
     out.outcome = MfaResponseOutcome::Success;
-    out.status = json.value(QStringLiteral("status")).toString();
+    out.status = json->value(QStringLiteral("status")).toString();
     return out;
 }

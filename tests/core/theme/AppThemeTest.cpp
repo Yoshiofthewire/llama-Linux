@@ -8,13 +8,13 @@ class AppThemeTest : public QObject
     Q_OBJECT
 
 private slots:
-    void thirteenThemesMatchWebList();
-    void defaultThemeIsDarkMatter();
+    void fifteenThemesMatchWebList();
+    void defaultThemeIsPatinaKy();
     void spotCheckHexValuesAgainstThemeTs();
     void lightThemesGetLightColorScheme();
 };
 
-void AppThemeTest::thirteenThemesMatchWebList()
+void AppThemeTest::fifteenThemesMatchWebList()
 {
     const QStringList expected = {
         QStringLiteral("Dark Matter"),
@@ -30,10 +30,12 @@ void AppThemeTest::thirteenThemesMatchWebList()
         QStringLiteral("Sky"),
         QStringLiteral("Forest"),
         QStringLiteral("Sun"),
+        QStringLiteral("Patina Ky"),
+        QStringLiteral("Polished Ky"),
     };
 
     const QStringList actual = AppTheme::themeNames();
-    QCOMPARE(actual.size(), 13);
+    QCOMPARE(actual.size(), 15);
     QCOMPARE(actual, expected);
 
     for (const QString& name : actual) {
@@ -43,10 +45,10 @@ void AppThemeTest::thirteenThemesMatchWebList()
     }
 }
 
-void AppThemeTest::defaultThemeIsDarkMatter()
+void AppThemeTest::defaultThemeIsPatinaKy()
 {
-    QCOMPARE(AppTheme::defaultThemeName(), QStringLiteral("Dark Matter"));
-    QCOMPARE(AppTheme::palette(QStringLiteral("Nope")), AppTheme::palette(QStringLiteral("Dark Matter")));
+    QCOMPARE(AppTheme::defaultThemeName(), QStringLiteral("Patina Ky"));
+    QCOMPARE(AppTheme::palette(QStringLiteral("Nope")), AppTheme::palette(QStringLiteral("Patina Ky")));
 }
 
 void AppThemeTest::spotCheckHexValuesAgainstThemeTs()
@@ -59,6 +61,14 @@ void AppThemeTest::spotCheckHexValuesAgainstThemeTs()
     QCOMPARE(AppTheme::palette(QStringLiteral("White Cliffs")).panel, 0xFFFFFFu);
     QCOMPARE(AppTheme::palette(QStringLiteral("Sun")).line, 0xD4B27Au);
     QCOMPARE(AppTheme::palette(QStringLiteral("Ocean")).accentSoft, 0x214657u);
+
+    const ThemePalette patinaKy = AppTheme::palette(QStringLiteral("Patina Ky"));
+    QCOMPARE(patinaKy.bg, 0x0D0F14u);
+    QCOMPARE(patinaKy.accent, 0x4DEEEAu);
+
+    const ThemePalette polishedKy = AppTheme::palette(QStringLiteral("Polished Ky"));
+    QCOMPARE(polishedKy.bg, 0xEEF2F6u);
+    QCOMPARE(polishedKy.accent, 0x0891B2u);
 }
 
 void AppThemeTest::lightThemesGetLightColorScheme()
@@ -69,6 +79,7 @@ void AppThemeTest::lightThemesGetLightColorScheme()
         QStringLiteral("White Cliffs"),
         QStringLiteral("Sky"),
         QStringLiteral("Sun"),
+        QStringLiteral("Polished Ky"),
     };
 
     for (const QString& name : AppTheme::themeNames()) {

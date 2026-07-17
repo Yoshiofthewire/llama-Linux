@@ -1,5 +1,5 @@
 import QtQuick 2.15
-import com.urlxl.LlamaMail 1.0
+import com.urlxl.mail 1.0
 
 // STYLE_GUIDE.md §4 "Empty state" (mirrors web's `.contacts-empty`,
 // `.inbox-empty-state`): dashed 1px border in an accent-tinted line color,
@@ -27,7 +27,6 @@ Rectangle {
 
     // Public API.
     property string text: ""
-    property string icon: "" // optional; empty string = no icon shown
 
     readonly property color dashColor: Qt.rgba(
         Theme.line.r * 0.7 + Theme.accent.r * 0.3,
@@ -84,15 +83,6 @@ Rectangle {
     Column {
         anchors.centerIn: parent
         spacing: 8
-
-        Image {
-            anchors.horizontalCenter: parent.horizontalCenter
-            source: root.icon
-            visible: root.icon !== ""
-            width: 32
-            height: 32
-            fillMode: Image.PreserveAspectFit
-        }
 
         Text {
             anchors.horizontalCenter: parent.horizontalCenter

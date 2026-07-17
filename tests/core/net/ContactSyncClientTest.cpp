@@ -23,6 +23,11 @@ private slots:
     void tooOldTrueSurfacesFlagWithEmptyChangedAndDeleted();
     void pullUnauthorizedFrom401PassesErrorThrough();
     void deletedFieldRoundTripsTrueAndOmittedWhenFalse();
+    void dedupeParsesReportIntoMergedCountAndGroups();
+    void dedupeSendsAuthAsQueryParamsAndPostsToApiContactsDedupe();
+    void dedupeOnEmptyGroupsReturnsZeroMergedCountNoError();
+    void dedupeUnauthorizedFrom401MapsToError();
+    void dedupeOnMalformedBodyReturnsDecodingErrorNotCrash();
 };
 
 namespace {
@@ -424,6 +429,93 @@ void ContactSyncClientTest::deletedFieldRoundTripsTrueAndOmittedWhenFalse()
 
     const Contact roundTrippedNotDeleted = ContactWire::contactFromJson(notDeletedJson);
     QCOMPARE(roundTrippedNotDeleted.deleted, false);
+}
+
+void ContactSyncClientTest::dedupeParsesReportIntoMergedCountAndGroups()
+{
+    const QByteArray body =
+        R"({"mergedCount":3,"groups":[{"survivor":"c-1","absorbed":["c-2","c-3"]},{"survivor":"c-4","absorbed":["c-5"]}]})";
+    FakeRelayServer fake(httpResponse(200, "OK", body));
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+
+    const QUrl serverBaseUrl(QStringLiteral("http://127.0.0.1:%1").arg(fake.port()));
+    const RelayAuth auth{ QStringLiteral("sub-1"), QStringLiteral("hash-1") };
+    const ContactDedupeResult result = client.dedupe(serverBaseUrl, auth);
+
+    QVERIFY(!result.error.has_value());
+    QCOMPARE(result.mergedCount, 3);
+    QCOMPARE(result.groups.size(), 2);
+    QCOMPARE(result.groups.at(0).survivor, QStringLiteral("c-1"));
+    QCOMPARE(result.groups.at(0).absorbed, (QVector<QString>{QStringLiteral("c-2"), QStringLiteral("c-3")}));
+    QCOMPARE(result.groups.at(1).survivor, QStringLiteral("c-4"));
+    QCOMPARE(result.groups.at(1).absorbed, (QVector<QString>{QStringLiteral("c-5")}));
+}
+
+void ContactSyncClientTest::dedupeSendsAuthAsQueryParamsAndPostsToApiContactsDedupe()
+{
+    FakeRelayServer fake(httpResponse(200, "OK", R"({"mergedCount":0,"groups":[]})"));
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+
+    const QUrl serverBaseUrl(QStringLiteral("http://127.0.0.1:%1").arg(fake.port()));
+    const RelayAuth auth{ QStringLiteral("sub-9"), QStringLiteral("hash-9") };
+    client.dedupe(serverBaseUrl, auth);
+
+    const QByteArray request = fake.receivedRequest();
+    QVERIFY(request.contains("POST /api/contacts/dedupe?"));
+    QVERIFY(request.contains("sub=sub-9"));
+    QVERIFY(request.contains("hash=hash-9"));
+}
+
+void ContactSyncClientTest::dedupeOnEmptyGroupsReturnsZeroMergedCountNoError()
+{
+    FakeRelayServer fake(httpResponse(200, "OK", R"({"mergedCount":0,"groups":[]})"));
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+
+    const QUrl serverBaseUrl(QStringLiteral("http://127.0.0.1:%1").arg(fake.port()));
+    const RelayAuth auth{ QStringLiteral("sub-1"), QStringLiteral("hash-1") };
+    const ContactDedupeResult result = client.dedupe(serverBaseUrl, auth);
+
+    QVERIFY(!result.error.has_value());
+    QCOMPARE(result.mergedCount, 0);
+    QVERIFY(result.groups.isEmpty());
+}
+
+void ContactSyncClientTest::dedupeUnauthorizedFrom401MapsToError()
+{
+    FakeRelayServer fake(httpResponse(401, "Unauthorized", "Unauthorized\n"));
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+
+    const QUrl serverBaseUrl(QStringLiteral("http://127.0.0.1:%1").arg(fake.port()));
+    const RelayAuth auth{ QStringLiteral("sub-1"), QStringLiteral("hash-1") };
+    const ContactDedupeResult result = client.dedupe(serverBaseUrl, auth);
+
+    QVERIFY(result.error.has_value());
+    QCOMPARE(*result.error, NetworkError::Unauthorized);
+    QCOMPARE(result.mergedCount, 0);
+    QVERIFY(result.groups.isEmpty());
+}
+
+void ContactSyncClientTest::dedupeOnMalformedBodyReturnsDecodingErrorNotCrash()
+{
+    FakeRelayServer fake(httpResponse(200, "OK", "not json"));
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+
+    const QUrl serverBaseUrl(QStringLiteral("http://127.0.0.1:%1").arg(fake.port()));
+    const RelayAuth auth{ QStringLiteral("sub-1"), QStringLiteral("hash-1") };
+    const ContactDedupeResult result = client.dedupe(serverBaseUrl, auth);
+
+    QVERIFY(result.error.has_value());
+    QCOMPARE(*result.error, NetworkError::Decoding);
 }
 
 QTEST_GUILESS_MAIN(ContactSyncClientTest)

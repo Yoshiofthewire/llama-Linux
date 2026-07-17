@@ -1,8 +1,9 @@
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import QtWebEngine
-import com.urlxl.LlamaMail 1.0
+import com.urlxl.mail 1.0
 import "../components"
+import "../utils/format.js" as Format
 
 // Task 35 -- plain reusable Item, deliberately NOT a Kirigami.Page (see
 // Phase 6 global constraint 4): MobileRoot wraps this in a thin
@@ -95,7 +96,10 @@ Item {
     // First letter(s) of the sender's display name (or, absent a display
     // name, the local-part of the address), split on whitespace, up to 2
     // characters -- "reasonable initials logic" per Task 35's brief, same
-    // shape as Avatar's other call sites.
+    // shape as Avatar's other call sites. The actual whitespace-split-to-
+    // initials core is shared (Format.initialsFromNamePart()); the
+    // "Name <email>" parsing and email-local-part fallback stay here since
+    // MobileRoot.qml's own sender-initials wrapper doesn't need the latter.
     function initialsFor(sender) {
         const s = sender || ""
         const lt = s.indexOf("<")
@@ -105,11 +109,7 @@ Item {
             const at = addr.indexOf("@")
             namePart = at !== -1 ? addr.substring(0, at) : addr
         }
-        const parts = namePart.split(/\s+/).filter(function (p) { return p.length > 0 })
-        let initials = ""
-        for (let i = 0; i < parts.length && initials.length < 2; i++)
-            initials += parts[i].charAt(0).toUpperCase()
-        return initials
+        return Format.initialsFromNamePart(namePart)
     }
 
     function formatSize(size) {

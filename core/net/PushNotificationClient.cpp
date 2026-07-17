@@ -4,9 +4,7 @@
 #include "net/RelayAuth.h"
 
 #include <QJsonArray>
-#include <QJsonDocument>
 #include <QJsonObject>
-#include <QJsonParseError>
 
 namespace {
 
@@ -69,15 +67,15 @@ PullResult PushNotificationClient::pull(const QUrl& pullEndpoint, const RelayAut
         return out;
     }
 
-    QJsonParseError parseError{};
-    const QJsonDocument doc = QJsonDocument::fromJson(result.body, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+    QString errorString;
+    const std::optional<QJsonObject> decoded = decodeJsonObject(result.body, &errorString);
+    if (!decoded.has_value()) {
         out.error = NetworkError::Decoding;
-        out.detail = QStringLiteral("Failed to decode pull response: %1").arg(parseError.errorString());
+        out.detail = QStringLiteral("Failed to decode pull response: %1").arg(errorString);
         return out;
     }
 
-    const QJsonObject json = doc.object();
+    const QJsonObject json = *decoded;
     out.deliveryMode = json.value(QStringLiteral("deliveryMode")).toString();
     out.cursor = static_cast<qint64>(json.value(QStringLiteral("cursor")).toDouble());
 

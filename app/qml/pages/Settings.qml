@@ -1,13 +1,13 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import com.urlxl.LlamaMail 1.0
+import com.urlxl.mail 1.0
 import "../components"
 // Qualified import of this same directory, aliased to PairingPage -- the
 // bare name "Pairing" is ambiguous in this file: the automatic IMPLICIT
 // same-directory import (every .qml file in pages/ is implicitly visible by
 // filename to every other file in pages/, no import statement needed) would
-// resolve "Pairing" to Pairing.qml, but the "com.urlxl.LlamaMail 1.0"
+// resolve "Pairing" to Pairing.qml, but the "com.urlxl.mail 1.0"
 // import above explicitly registers a QML singleton ALSO named "Pairing"
 // (the PairingController instance, see main.cpp) -- and per QML's import
 // precedence rules, an explicit import always wins over the implicit
@@ -44,6 +44,11 @@ Item {
     // root hosts this decides what "close" means (pageStack.pop() for
     // Mobile, sheet.close() for Desktop).
     signal closed()
+    // PGP QR key exchange: same "let the host decide how to navigate" shape
+    // as closed() -- MobileRoot pushes PgpMyQrCode.qml via pageStack,
+    // DesktopRoot opens it in a Kirigami.OverlaySheet (same choice it
+    // already made for this Settings screen itself).
+    signal myPgpQrCodeRequested()
 
     implicitWidth: 480
     implicitHeight: 560
@@ -319,6 +324,10 @@ Item {
                         text: i18n("Sync Now")
                         enabled: !ContactsApp.isBusy
                         onClicked: ContactsApp.sync()
+                    }
+                    GhostButton {
+                        text: i18n("My PGP QR Code")
+                        onClicked: root.myPgpQrCodeRequested()
                     }
                     Item { Layout.fillWidth: true }
                 }

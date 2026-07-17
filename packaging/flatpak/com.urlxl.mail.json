@@ -1,5 +1,5 @@
 {
-    "app-id": "com.urlxl.LlamaMail",
+    "app-id": "com.urlxl.mail",
     "runtime": "org.kde.Platform",
     "runtime-version": "6.10",
     "sdk": "org.kde.Sdk",
@@ -11,7 +11,7 @@
 
         /* KDBusService(KDBusService::Unique) in app/main.cpp claims this
            well-known bus name for duplicate-launch detection and D-Bus
-           activation (packaging/dbus/com.urlxl.LlamaMail.service, wired by
+           activation (packaging/dbus/com.urlxl.mail.service, wired by
            Task 45). KUnifiedPush::Connector (app/push/UnifiedPushConnector.cpp)
            registers under this same serviceName on the session bus without
            claiming it itself -- its constructor's own comment documents
@@ -20,14 +20,27 @@
            --own-name, KDBusService::Unique's RequestName call is denied by
            the sandbox and every launch (plus D-Bus activation and
            UnifiedPush delivery) breaks. */
-        "--own-name=com.urlxl.LlamaMail",
+        "--own-name=com.urlxl.mail",
 
         /* Qt6Keychain (app/platform/SecureStoreKeychain.cpp, used to persist
            pairing credentials) talks to the Secret Service D-Bus API on
            Linux, i.e. org.freedesktop.secrets, exported by
            gnome-keyring/kwalletd's ksecretd. Without this the keychain reads
            and writes on every pairing/credential operation fail. */
-        "--talk-name=org.freedesktop.secrets"
+        "--talk-name=org.freedesktop.secrets",
+
+        /* PGP QR key exchange's "Scan to Add Contact Key" screen needs
+           camera access (QtMultimedia Camera/CaptureSession, decoded via
+           PgpQrScanner/zxing-cpp). This machine's qt6-multimedia-ffmpeg
+           backend talks to V4L2 devices directly, not the pipewire camera
+           portal, so the narrower --socket=pipewire (sufficient for a
+           GStreamer/pipewire-portal backend) is NOT enough here --
+           confirmed by which qt6-multimedia-* backend package is actually
+           installed (ffmpeg, not gstreamer) on this dev machine. Flag for
+           re-verification against whichever backend org.kde.Sdk 6.10's
+           runtime actually ships if pipewire access alone turns out to
+           work there instead. */
+        "--device=all"
 
         /* Desktop notifications (KF6::Notifications, NotificationDispatcher.cpp,
            KNotification("newMail")): deliberately NOT adding
@@ -62,6 +75,25 @@
                     "type": "archive",
                     "url": "https://github.com/frankosterfeld/qtkeychain/archive/refs/tags/0.17.0.tar.gz",
                     "sha256": "3b85c3929034b0a99da777130c34d99f006fcd3a9d56564159399a33fee0e504"
+                }
+            ]
+        },
+        {
+            "name": "zxing-cpp",
+            "buildsystem": "cmake-ninja",
+            "config-opts": [
+                "-DCMAKE_BUILD_TYPE=Release",
+                "-DZXING_READERS=ON",
+                "-DZXING_WRITERS=ON",
+                "-DZXING_EXAMPLES=OFF",
+                "-DZXING_UNIT_TESTS=OFF",
+                "-DZXING_DEPENDENCIES=LOCAL"
+            ],
+            "sources": [
+                {
+                    "type": "archive",
+                    "url": "https://github.com/zxing-cpp/zxing-cpp/archive/refs/tags/v3.1.0.tar.gz",
+                    "sha256": "3fb23a3a82788fd176f0109ddbaa76c6a53e78fd19fc93554eeb6b9e16ae6f90"
                 }
             ]
         },

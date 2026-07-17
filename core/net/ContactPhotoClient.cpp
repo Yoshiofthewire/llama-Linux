@@ -5,22 +5,14 @@
 
 namespace {
 
-// Appends "api/contacts/<contactUid>/photo" to serverBaseUrl's path -- same
-// trailing-slash-safe approach as GroupsClient.cpp's endpointFor(), extended
-// with the contactUid path segment this endpoint needs. url.setPath()'s
+// Builds "api/contacts/<contactUid>/photo" and joins it onto serverBaseUrl's
+// path via the shared joinUrlPath() helper (see HttpClient.h). url.setPath()'s
 // default DecodedMode percent-encodes contactUid automatically, matching
 // this class's header-comment note on why no manual encoding is done here.
 QUrl endpointFor(const QUrl& serverBaseUrl, const QString& contactUid)
 {
-    QUrl url = serverBaseUrl;
-    QString path = url.path();
-    if (!path.endsWith(QLatin1Char('/')))
-        path += QLatin1Char('/');
-    path += QStringLiteral("api/contacts/");
-    path += contactUid;
-    path += QStringLiteral("/photo");
-    url.setPath(path);
-    return url;
+    return joinUrlPath(serverBaseUrl,
+                        QStringLiteral("api/contacts/") + contactUid + QStringLiteral("/photo"));
 }
 
 } // namespace

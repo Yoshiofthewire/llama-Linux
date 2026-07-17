@@ -21,23 +21,6 @@ QString standardFolderWireName(StandardFolder folder)
     return QString();
 }
 
-std::optional<StandardFolder> standardFolderFromWireName(const QString& wireName)
-{
-    if (wireName == QStringLiteral("INBOX"))
-        return StandardFolder::Inbox;
-    if (wireName == QStringLiteral("Drafts"))
-        return StandardFolder::Drafts;
-    if (wireName == QStringLiteral("Junk"))
-        return StandardFolder::Junk;
-    if (wireName == QStringLiteral("Sent"))
-        return StandardFolder::Sent;
-    if (wireName == QStringLiteral("Trash"))
-        return StandardFolder::Trash;
-    if (wireName == QStringLiteral("Archive"))
-        return StandardFolder::Archive;
-    return std::nullopt;
-}
-
 QString standardFolderDisplayName(const QString& fullPath)
 {
     const QString normalized = QString(fullPath).replace(QLatin1Char('.'), QLatin1Char('/'));

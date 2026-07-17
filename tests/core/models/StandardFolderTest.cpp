@@ -7,14 +7,13 @@ class StandardFolderTest : public QObject
     Q_OBJECT
 
 private slots:
-    void wireNameRoundTripsForAllValues();
-    void fromWireNameRejectsUnknown();
+    void wireNameCoversAllValues();
     void displayNameSplitsOnSlash();
     void displayNameSplitsOnDot();
     void displayNameHandlesPlainPath();
 };
 
-void StandardFolderTest::wireNameRoundTripsForAllValues()
+void StandardFolderTest::wireNameCoversAllValues()
 {
     const QVector<QPair<StandardFolder, QString>> cases = {
         {StandardFolder::Inbox, QStringLiteral("INBOX")},
@@ -25,18 +24,8 @@ void StandardFolderTest::wireNameRoundTripsForAllValues()
         {StandardFolder::Archive, QStringLiteral("Archive")},
     };
 
-    for (const auto& [folder, wireName] : cases) {
+    for (const auto& [folder, wireName] : cases)
         QCOMPARE(standardFolderWireName(folder), wireName);
-        const std::optional<StandardFolder> roundTripped = standardFolderFromWireName(wireName);
-        QVERIFY(roundTripped.has_value());
-        QCOMPARE(*roundTripped, folder);
-    }
-}
-
-void StandardFolderTest::fromWireNameRejectsUnknown()
-{
-    QVERIFY(!standardFolderFromWireName(QStringLiteral("NotAFolder")).has_value());
-    QVERIFY(!standardFolderFromWireName(QString()).has_value());
 }
 
 void StandardFolderTest::displayNameSplitsOnSlash()

@@ -2,6 +2,7 @@
   <qresource prefix="/qml">
     <file>MobileRoot.qml</file>
     <file>DesktopRoot.qml</file>
+    <file>utils/format.js</file>
     <file>components/PrimaryButton.qml</file>
     <file>components/GhostButton.qml</file>
     <file>components/DangerButton.qml</file>
@@ -12,12 +13,17 @@
     <file>components/SectionLabel.qml</file>
     <file>components/ThemedTextField.qml</file>
     <file>components/RepeaterField.qml</file>
+    <file>components/TokenField.qml</file>
+    <file>components/AutocompleteDropdown.qml</file>
+    <file>components/Toast.qml</file>
+    <file>components/AddressBookPickerDialog.qml</file>
     <file>pages/EmailDetail.qml</file>
     <file>pages/Compose.qml</file>
     <file>pages/ContactsList.qml</file>
     <file>pages/ContactDetail.qml</file>
     <file>pages/Pairing.qml</file>
-    <file>pages/MfaApproval.qml</file>
     <file>pages/Settings.qml</file>
+    <file>pages/PgpMyQrCode.qml</file>
+    <file>pages/PgpScanContactKey.qml</file>
   </qresource>
 </RCC>

@@ -48,59 +48,6 @@ struct InboxFetchResult
     QStringList removed;    // json "removed", always empty when !isDelta
 };
 
-// One entry of GET /api/inbox/folders's "folders" array.
-struct MailFolderItem
-{
-    QString path;
-    bool deletable = false;
-
-    bool operator==(const MailFolderItem&) const = default;
-};
-
-struct ListFoldersResult
-{
-    std::optional<NetworkError> error;
-    QString detail;
-    QString parent;
-    QVector<MailFolderItem> folders;
-};
-
-// POST /api/inbox/folders response: {ok, parent, name, folder} -- `folder`
-// here is a plain string path (mailClient.CreateFolder returns (string,
-// error)), NOT the {path, deletable} object shape used by the GET list
-// response above -- do not conflate the two.
-struct CreateFolderResult
-{
-    std::optional<NetworkError> error;
-    QString detail;
-    bool ok = false;
-    QString parent;
-    QString name;
-    QString folder;
-};
-
-// PUT /api/inbox/folders (rename) response: {ok, folder, renamed, parent} --
-// all plain strings/bool.
-struct RenameFolderResult
-{
-    std::optional<NetworkError> error;
-    QString detail;
-    bool ok = false;
-    QString folder;
-    QString renamed;
-    QString parent;
-};
-
-// DELETE /api/inbox/folders response: {ok, folder, parent}.
-struct DeleteFolderResult
-{
-    std::optional<NetworkError> error;
-    QString detail;
-    bool ok = false;
-    QString folder;
-    QString parent;
-};
-
 // One entry of POST /api/inbox/actions's "failed" array.
 struct ActionFailure
 {
@@ -185,12 +132,11 @@ struct DownloadAttachmentResult
     QString filename;
 };
 
-// Inbox fetch, folder CRUD, inbox action, mail send, and attachment list/
-// download calls against the Relay backend's /api/inbox, /api/inbox/
-// folders, /api/inbox/actions, /api/mail/send, /api/mail/attachments, and
-// /api/mail/attachment endpoints. sub/hash (RelayAuth) apply uniformly to
-// every method here via query params, confirmed against
-// resolveMailAuthContext / withMailAuth in the Go backend.
+// Inbox fetch, inbox action, mail send, and attachment list/download calls
+// against the Relay backend's /api/inbox, /api/inbox/actions, /api/mail/
+// send, /api/mail/attachments, and /api/mail/attachment endpoints. sub/hash
+// (RelayAuth) apply uniformly to every method here via query params,
+// confirmed against resolveMailAuthContext / withMailAuth in the Go backend.
 class RelayMailSource
 {
 public:
@@ -204,16 +150,6 @@ public:
     // just parses whatever comes back via InboxEmailItem.
     InboxFetchResult fetchInbox(const QUrl& serverBaseUrl, const RelayAuth& auth, std::optional<int> limit,
                                  const QString& mailbox, std::optional<qint64> since) const;
-
-    ListFoldersResult listFolders(const QUrl& serverBaseUrl, const RelayAuth& auth, const QString& parent) const;
-
-    CreateFolderResult createFolder(const QUrl& serverBaseUrl, const RelayAuth& auth, const QString& parent,
-                                     const QString& name) const;
-
-    RenameFolderResult renameFolder(const QUrl& serverBaseUrl, const RelayAuth& auth, const QString& folder,
-                                     const QString& name) const;
-
-    DeleteFolderResult deleteFolder(const QUrl& serverBaseUrl, const RelayAuth& auth, const QString& folder) const;
 
     // Plain QString action (not an enum) -- mirrors how Email::status/
     // Email::label are already plain QString wire values, keeping this

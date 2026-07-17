@@ -18,9 +18,6 @@ public:
     QString themeId() const;
     void setThemeId(const QString& themeId);
 
-    std::optional<bool> manualMobileOverride() const;
-    void setManualMobileOverride(std::optional<bool> override);
-
     // Notifications
     QString pushServerBaseUrl() const;
     void setPushServerBaseUrl(const QString& baseUrl);

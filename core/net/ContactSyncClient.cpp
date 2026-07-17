@@ -4,26 +4,9 @@
 #include "net/RelayAuth.h"
 
 #include <QJsonArray>
-#include <QJsonDocument>
 #include <QJsonObject>
-#include <QJsonParseError>
 
 namespace {
-
-// Appends "api/contacts/sync" to serverBaseUrl's path, mirroring
-// MfaResponseClient's endpointFor -- preserves any existing path on
-// serverBaseUrl and ensures exactly one slash between the two, regardless of
-// whether the caller's base URL was given with or without a trailing slash.
-QUrl endpointFor(const QUrl& serverBaseUrl)
-{
-    QUrl url = serverBaseUrl;
-    QString path = url.path();
-    if (!path.endsWith(QLatin1Char('/')))
-        path += QLatin1Char('/');
-    path += QStringLiteral("api/contacts/sync");
-    url.setPath(path);
-    return url;
-}
 
 // JSON mapping helpers -- kept here rather than in core/models/Contact.h so
 // the plain model header stays free of wire-format concerns, matching how
@@ -336,6 +319,30 @@ ContactSyncResult parseSyncResponse(const QJsonObject& json)
     return out;
 }
 
+// Parses the {mergedCount, groups:[{survivor, absorbed[]}]} DedupeReport
+// shape -- groups absent/empty maps to an empty vector, not a parse error,
+// same "absent means empty" convention parseSyncResponse already follows.
+ContactDedupeResult parseDedupeResponse(const QJsonObject& json)
+{
+    ContactDedupeResult out;
+    out.mergedCount = json.value(QStringLiteral("mergedCount")).toInt();
+
+    const QJsonArray groups = json.value(QStringLiteral("groups")).toArray();
+    out.groups.reserve(groups.size());
+    for (const QJsonValue& value : groups) {
+        const QJsonObject groupObj = value.toObject();
+        ContactDedupeGroup group;
+        group.survivor = groupObj.value(QStringLiteral("survivor")).toString();
+        const QJsonArray absorbed = groupObj.value(QStringLiteral("absorbed")).toArray();
+        group.absorbed.reserve(absorbed.size());
+        for (const QJsonValue& absorbedValue : absorbed)
+            group.absorbed.append(absorbedValue.toString());
+        out.groups.append(group);
+    }
+
+    return out;
+}
+
 } // namespace
 
 ContactSyncClient::ContactSyncClient(HttpClient& httpClient)
@@ -348,7 +355,8 @@ ContactSyncResult ContactSyncClient::pull(const QUrl& serverBaseUrl, const Relay
     QList<QPair<QString, QString>> query = auth.queryItems();
     query.append({ QStringLiteral("since"), QString::number(since) });
 
-    const HttpClient::HttpResult result = m_httpClient.get(endpointFor(serverBaseUrl), query);
+    const HttpClient::HttpResult result =
+        m_httpClient.get(joinUrlPath(serverBaseUrl, QStringLiteral("api/contacts/sync")), query);
 
     ContactSyncResult out;
 
@@ -360,15 +368,15 @@ ContactSyncResult ContactSyncClient::pull(const QUrl& serverBaseUrl, const Relay
         return out;
     }
 
-    QJsonParseError parseError{};
-    const QJsonDocument doc = QJsonDocument::fromJson(result.body, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+    QString errorString;
+    const std::optional<QJsonObject> json = decodeJsonObject(result.body, &errorString);
+    if (!json.has_value()) {
         out.error = NetworkError::Decoding;
-        out.detail = QStringLiteral("Failed to decode contact sync response: %1").arg(parseError.errorString());
+        out.detail = QStringLiteral("Failed to decode contact sync response: %1").arg(errorString);
         return out;
     }
 
-    return parseSyncResponse(doc.object());
+    return parseSyncResponse(*json);
 }
 
 ContactSyncResult ContactSyncClient::push(const QUrl& serverBaseUrl, const RelayAuth& auth, qint64 baseCursor,
@@ -378,7 +386,8 @@ ContactSyncResult ContactSyncClient::push(const QUrl& serverBaseUrl, const Relay
     body[QStringLiteral("baseCursor")] = baseCursor;
     body[QStringLiteral("changes")] = entriesToJson(changes, ContactWire::contactToJson);
 
-    const HttpClient::HttpResult result = m_httpClient.post(endpointFor(serverBaseUrl), auth.queryItems(), body);
+    const HttpClient::HttpResult result =
+        m_httpClient.post(joinUrlPath(serverBaseUrl, QStringLiteral("api/contacts/sync")), auth.queryItems(), body);
 
     ContactSyncResult out;
 
@@ -390,13 +399,39 @@ ContactSyncResult ContactSyncClient::push(const QUrl& serverBaseUrl, const Relay
         return out;
     }
 
-    QJsonParseError parseError{};
-    const QJsonDocument doc = QJsonDocument::fromJson(result.body, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+    QString errorString;
+    const std::optional<QJsonObject> json = decodeJsonObject(result.body, &errorString);
+    if (!json.has_value()) {
         out.error = NetworkError::Decoding;
-        out.detail = QStringLiteral("Failed to decode contact sync response: %1").arg(parseError.errorString());
+        out.detail = QStringLiteral("Failed to decode contact sync response: %1").arg(errorString);
         return out;
     }
 
-    return parseSyncResponse(doc.object());
+    return parseSyncResponse(*json);
+}
+
+ContactDedupeResult ContactSyncClient::dedupe(const QUrl& serverBaseUrl, const RelayAuth& auth) const
+{
+    const HttpClient::HttpResult result = m_httpClient.post(
+        joinUrlPath(serverBaseUrl, QStringLiteral("api/contacts/dedupe")), auth.queryItems(), QJsonObject{});
+
+    ContactDedupeResult out;
+
+    if (result.error.has_value()) {
+        out.error = result.error;
+        out.detail = !result.detail.isEmpty()
+            ? result.detail
+            : QStringLiteral("Contact dedupe failed with status %1").arg(result.statusCode);
+        return out;
+    }
+
+    QString errorString;
+    const std::optional<QJsonObject> json = decodeJsonObject(result.body, &errorString);
+    if (!json.has_value()) {
+        out.error = NetworkError::Decoding;
+        out.detail = QStringLiteral("Failed to decode contact dedupe response: %1").arg(errorString);
+        return out;
+    }
+
+    return parseDedupeResponse(*json);
 }

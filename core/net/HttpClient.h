@@ -3,6 +3,7 @@
 #include "net/NetworkError.h"
 
 #include <QByteArray>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QList>
 #include <QPair>
@@ -82,3 +83,23 @@ private:
 
     QNetworkAccessManager& m_manager;
 };
+
+// Appends apiPath to baseUrl's path -- preserves any existing path on
+// baseUrl and ensures exactly one slash between the two, regardless of
+// whether the caller's base URL was given with or without a trailing
+// slash. Shared by every Relay HTTP client's endpointFor()-style helper
+// (GroupsClient, MfaResponseClient, ContactSyncClient, ContactPhotoClient,
+// RelayMailSource), which all used to hand-roll this same join.
+QUrl joinUrlPath(const QUrl& baseUrl, const QString& apiPath);
+
+// Parses body as JSON and returns its top-level value as a QJsonObject, or
+// nullopt if the body isn't valid JSON or its top-level value isn't an
+// object. When errorString is non-null and decoding fails, it's set to the
+// QJsonParseError's message so callers can fold it into their own
+// human-readable detail text (existing wording/error-code mapping at each
+// call site is preserved -- this only replaces the parse-and-validate
+// boilerplate, not what callers do with the result).
+std::optional<QJsonObject> decodeJsonObject(const QByteArray& body, QString* errorString = nullptr);
+
+// Same as decodeJsonObject, but for a top-level JSON array.
+std::optional<QJsonArray> decodeJsonArray(const QByteArray& body, QString* errorString = nullptr);

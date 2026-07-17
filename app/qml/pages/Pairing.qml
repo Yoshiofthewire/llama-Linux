@@ -1,7 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import com.urlxl.LlamaMail 1.0
+import com.urlxl.mail 1.0
 import "../components"
 
 // Task 37 -- plain reusable Item, deliberately NOT a Kirigami.Page (see
@@ -53,7 +53,7 @@ Item {
 
             Text {
                 Layout.fillWidth: true
-                text: "✦" // sparkle glyph -- no image asset exists in this repo (see components/EmptyState.qml's icon property, unused so far)
+                text: "✦" // sparkle glyph -- no image asset exists in this repo
                 color: Theme.accent
                 font.pixelSize: 40
                 horizontalAlignment: Text.AlignHCenter

@@ -10,7 +10,6 @@ class SettingsStoreTest : public QObject
 private slots:
     void defaultsAreUnset();
     void themeIdRoundTrips();
-    void manualMobileOverrideRoundTrips();
     void pushServerBaseUrlRoundTrips();
     void pushDeliveryFieldsRoundTrip();
     void keywordVisibleDefaultsTrueUntilExplicitlyToggled();
@@ -30,8 +29,7 @@ void SettingsStoreTest::defaultsAreUnset()
     QVERIFY(dir.isValid());
     SettingsStore store(tempFilePath(dir, QStringLiteral("settings.ini")));
 
-    QCOMPARE(store.themeId(), QStringLiteral("Dark Matter"));
-    QVERIFY(!store.manualMobileOverride().has_value());
+    QCOMPARE(store.themeId(), QStringLiteral("Patina Ky"));
     QCOMPARE(store.pushServerBaseUrl(), QStringLiteral("https://ntfy.sh"));
 }
 
@@ -43,24 +41,6 @@ void SettingsStoreTest::themeIdRoundTrips()
 
     store.setThemeId(QStringLiteral("Solar Flare"));
     QCOMPARE(store.themeId(), QStringLiteral("Solar Flare"));
-}
-
-void SettingsStoreTest::manualMobileOverrideRoundTrips()
-{
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
-    SettingsStore store(tempFilePath(dir, QStringLiteral("settings.ini")));
-
-    store.setManualMobileOverride(true);
-    QVERIFY(store.manualMobileOverride().has_value());
-    QCOMPARE(store.manualMobileOverride().value(), true);
-
-    store.setManualMobileOverride(false);
-    QVERIFY(store.manualMobileOverride().has_value());
-    QCOMPARE(store.manualMobileOverride().value(), false);
-
-    store.setManualMobileOverride(std::nullopt);
-    QVERIFY(!store.manualMobileOverride().has_value());
 }
 
 void SettingsStoreTest::pushServerBaseUrlRoundTrips()

@@ -311,6 +311,49 @@ void ContactsController::sync()
     }
 }
 
+void ContactsController::dedupe()
+{
+    setBusy(true);
+    const ContactDedupeOutcome outcome = m_repository.dedupe();
+    setBusy(false);
+
+    switch (outcome.status) {
+    case ContactDedupeStatus::Success:
+        if (outcome.mergedCount > 0) {
+            // sync() pulls the resulting tombstones/survivor update, reloads
+            // the model, and sets its own lastError/statusMessage. Only
+            // prefix its message with the merge count when it also
+            // succeeded -- if the follow-up sync() itself fails, leave its
+            // failure message/lastError as-is rather than mask it behind a
+            // misleadingly cheerful "Merged N duplicate(s)" prefix.
+            sync();
+            if (lastError().isEmpty())
+                setStatusMessage(i18n("Merged %1 duplicate(s) -- %2", outcome.mergedCount, statusMessage()));
+        } else {
+            setLastError(QString());
+            setStatusMessage(i18n("No duplicates found"));
+            load();
+        }
+        break;
+    case ContactDedupeStatus::NotPaired:
+        setStatusMessage(QString());
+        setLastError(i18n("Not paired"));
+        break;
+    case ContactDedupeStatus::Unauthorized:
+        setStatusMessage(QString());
+        setLastError(i18n("Unauthorized -- please re-pair this device"));
+        break;
+    case ContactDedupeStatus::ServiceUnavailable:
+        setStatusMessage(QString());
+        setLastError(outcome.detail.isEmpty() ? i18n("Service unavailable") : outcome.detail);
+        break;
+    case ContactDedupeStatus::Retry:
+        setStatusMessage(QString());
+        setLastError(outcome.detail.isEmpty() ? i18n("Dedupe failed, try again") : outcome.detail);
+        break;
+    }
+}
+
 QVariantMap ContactsController::contactAt(const QString& uid)
 {
     const std::optional<Contact> found = findByUid(m_repository.contacts(), uid);
@@ -370,62 +413,16 @@ QVariantMap ContactsController::contactAt(const QString& uid)
     return map;
 }
 
-QString ContactsController::createContact(const QVariantMap& fields)
+// Shared field-population body of createContact/updateContact: reads every
+// non-fn/non-identity key out of `fields` into `contact`. `contact.emails`/
+// `contact.phones` are used as replacePrimaryEntry's `existing` base --
+// createContact passes in a freshly-constructed Contact (so that base is
+// already {}, collapsing to the same "single-entry (or empty) list"
+// behavior the old duplicated code got from passing {} explicitly), while
+// updateContact passes in the loaded Contact's current emails/phones so
+// entries beyond index 0 are preserved, per this class's own doc comment.
+void ContactsController::applyFieldsToContact(Contact& contact, const QVariantMap& fields) const
 {
-    const QString fn = fields.value(QStringLiteral("fn")).toString().trimmed();
-    if (fn.isEmpty()) {
-        setLastError(i18n("Name is required"));
-        return QString();
-    }
-
-    Contact contact;
-    contact.fn = fn;
-    contact.org = toOptional(fields.value(QStringLiteral("org")).toString());
-    contact.notes = toOptional(fields.value(QStringLiteral("notes")).toString());
-    contact.emails =
-        replacePrimaryEntry<ContactEmailEntry>({}, fields.value(QStringLiteral("email")).toString().trimmed());
-    contact.phones =
-        replacePrimaryEntry<ContactPhoneEntry>({}, fields.value(QStringLiteral("phone")).toString().trimmed());
-
-    contact.groupIds = stringListFromVariantList(fields.value(QStringLiteral("groupIds")).toList());
-    contact.photoRef = toOptional(fields.value(QStringLiteral("photoRef")).toString());
-    contact.pgpKey = toOptional(fields.value(QStringLiteral("pgpKey")).toString());
-    contact.ims = entriesFromVariantList<ContactImEntry>(fields.value(QStringLiteral("ims")).toList(), imEntryFromMap);
-    contact.websites = entriesFromVariantList<ContactUrlEntry>(
-        fields.value(QStringLiteral("websites")).toList(), urlEntryFromMap);
-    contact.relations = entriesFromVariantList<ContactRelationEntry>(
-        fields.value(QStringLiteral("relations")).toList(), relationEntryFromMap);
-    contact.events =
-        entriesFromVariantList<ContactEventEntry>(fields.value(QStringLiteral("events")).toList(), eventEntryFromMap);
-    contact.phoneticGivenName = toOptional(fields.value(QStringLiteral("phoneticGivenName")).toString());
-    contact.phoneticFamilyName = toOptional(fields.value(QStringLiteral("phoneticFamilyName")).toString());
-    contact.department = toOptional(fields.value(QStringLiteral("department")).toString());
-    contact.customFields = entriesFromVariantList<ContactCustomFieldEntry>(
-        fields.value(QStringLiteral("customFields")).toList(), customFieldEntryFromMap);
-    contact.pronouns = toOptional(fields.value(QStringLiteral("pronouns")).toString());
-
-    const QString newUid = m_repository.queueCreate(contact);
-    setLastError(QString());
-    load();
-    return newUid;
-}
-
-bool ContactsController::updateContact(const QString& uid, const QVariantMap& fields)
-{
-    const QString fn = fields.value(QStringLiteral("fn")).toString().trimmed();
-    if (fn.isEmpty()) {
-        setLastError(i18n("Name is required"));
-        return false;
-    }
-
-    const std::optional<Contact> found = findByUid(m_repository.contacts(), uid);
-    if (!found) {
-        setLastError(i18n("Contact not found"));
-        return false;
-    }
-
-    Contact contact = *found;
-    contact.fn = fn;
     contact.org = toOptional(fields.value(QStringLiteral("org")).toString());
     contact.notes = toOptional(fields.value(QStringLiteral("notes")).toString());
     contact.emails = replacePrimaryEntry<ContactEmailEntry>(
@@ -449,6 +446,43 @@ bool ContactsController::updateContact(const QString& uid, const QVariantMap& fi
     contact.customFields = entriesFromVariantList<ContactCustomFieldEntry>(
         fields.value(QStringLiteral("customFields")).toList(), customFieldEntryFromMap);
     contact.pronouns = toOptional(fields.value(QStringLiteral("pronouns")).toString());
+}
+
+QString ContactsController::createContact(const QVariantMap& fields)
+{
+    const QString fn = fields.value(QStringLiteral("fn")).toString().trimmed();
+    if (fn.isEmpty()) {
+        setLastError(i18n("Name is required"));
+        return QString();
+    }
+
+    Contact contact;
+    contact.fn = fn;
+    applyFieldsToContact(contact, fields);
+
+    const QString newUid = m_repository.queueCreate(contact);
+    setLastError(QString());
+    load();
+    return newUid;
+}
+
+bool ContactsController::updateContact(const QString& uid, const QVariantMap& fields)
+{
+    const QString fn = fields.value(QStringLiteral("fn")).toString().trimmed();
+    if (fn.isEmpty()) {
+        setLastError(i18n("Name is required"));
+        return false;
+    }
+
+    const std::optional<Contact> found = findByUid(m_repository.contacts(), uid);
+    if (!found) {
+        setLastError(i18n("Contact not found"));
+        return false;
+    }
+
+    Contact contact = *found;
+    contact.fn = fn;
+    applyFieldsToContact(contact, fields);
 
     m_repository.queueUpdate(contact);
     setLastError(QString());
@@ -476,6 +510,65 @@ QVariantList ContactsController::allGroups()
         list.append(map);
     }
     return list;
+}
+
+namespace {
+
+struct ContactSearchCandidate
+{
+    QString uid;
+    QString name;
+    QString email;
+    QString department;
+    bool isPrefixMatch = false;
+};
+
+} // namespace
+
+QVariantList ContactsController::searchContacts(const QString& query, int limit)
+{
+    const QString needle = query.trimmed().toCaseFolded();
+
+    QVector<ContactSearchCandidate> candidates;
+    for (const Contact& contact : m_repository.contacts()) {
+        const QString name = contact.fn.value_or(QString());
+        const QString foldedName = name.toCaseFolded();
+        for (const ContactEmailEntry& email : contact.emails) {
+            const QString foldedEmail = email.value.toCaseFolded();
+            if (!needle.isEmpty() && !foldedName.contains(needle) && !foldedEmail.contains(needle))
+                continue;
+            ContactSearchCandidate candidate;
+            candidate.uid = contact.uid;
+            candidate.name = name;
+            candidate.email = email.value;
+            candidate.department = contact.department.value_or(QString());
+            candidate.isPrefixMatch =
+                needle.isEmpty() || foldedName.startsWith(needle) || foldedEmail.startsWith(needle);
+            candidates.append(candidate);
+        }
+    }
+
+    // Prefix/exact matches first; std::stable_sort keeps contacts() order
+    // as the tiebreaker within each rank.
+    std::stable_sort(candidates.begin(), candidates.end(),
+                      [](const ContactSearchCandidate& a, const ContactSearchCandidate& b) {
+                          return a.isPrefixMatch && !b.isPrefixMatch;
+                      });
+
+    if (limit > 0 && candidates.size() > limit)
+        candidates.resize(limit);
+
+    QVariantList results;
+    results.reserve(candidates.size());
+    for (const ContactSearchCandidate& candidate : candidates) {
+        QVariantMap map;
+        map[QStringLiteral("uid")] = candidate.uid;
+        map[QStringLiteral("name")] = candidate.name;
+        map[QStringLiteral("email")] = candidate.email;
+        map[QStringLiteral("department")] = candidate.department;
+        results.append(map);
+    }
+    return results;
 }
 
 QString ContactsController::photoPathFor(const QString& uid)
