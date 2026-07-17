@@ -6,20 +6,88 @@
 #include "db/GroupDao.h"
 #include "db/PendingContactChangeDao.h"
 #include "domain/ContactSyncRepository.h"
+#include "domain/DevicePairing.h"
 #include "domain/GroupsRepository.h"
 #include "domain/PairingStore.h"
+#include "models/Group.h"
 #include "net/ContactSyncClient.h"
 #include "net/GroupsClient.h"
 #include "net/HttpClient.h"
 #include "stores/CursorStore.h"
 #include "stores/SecureStoreFile.h"
 
+#include "../../core/net/FakeRelayServer.h"
+
+#include <QHostAddress>
 #include <QNetworkAccessManager>
 #include <QSignalSpy>
+#include <QTcpServer>
+#include <QTcpSocket>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QVariantList>
 #include <QVariantMap>
+#include <utility>
+
+namespace {
+
+// Review follow-up (Task 2): the shared single-response FakeRelayServer
+// (tests/core/net/FakeRelayServer.h) can't be reused as-is for
+// syncSuccessRefreshesGroupsCache below, because that test drives
+// ContactsController::sync() end to end -- which fires *two* sequential
+// outbound requests against the same paired serverBaseUrl (first
+// ContactSyncRepository::sync()'s GET /api/contacts/sync pull, then, only on
+// Success, GroupsRepository::refresh()'s GET /api/groups) and each needs its
+// own canned response shape. This is a small purpose-built variant, local to
+// this test file, that dispatches on the request path instead of always
+// replaying one fixed response. Both requests here are plain GETs (no
+// pending changes queued -> ContactSyncRepository::sync() takes the pull(),
+// not push(), branch), so -- unlike FakeRelayServer -- this doesn't need to
+// wait for a Content-Length body; the header terminator is enough to know
+// the request is complete.
+class DualPathFakeRelayServer : public QObject
+{
+public:
+    DualPathFakeRelayServer(QByteArray contactsSyncResponse, QByteArray groupsResponse)
+        : m_contactsSyncResponse(std::move(contactsSyncResponse))
+        , m_groupsResponse(std::move(groupsResponse))
+    {
+        m_server.listen(QHostAddress::LocalHost);
+        connect(&m_server, &QTcpServer::newConnection, this, &DualPathFakeRelayServer::onNewConnection);
+    }
+
+    quint16 port() const { return m_server.serverPort(); }
+    bool groupsRequestReceived() const { return m_groupsRequestReceived; }
+    bool contactsSyncRequestReceived() const { return m_contactsSyncRequestReceived; }
+
+private:
+    void onNewConnection()
+    {
+        QTcpSocket* socket = m_server.nextPendingConnection();
+        auto buffer = std::make_shared<QByteArray>();
+        connect(socket, &QTcpSocket::readyRead, this, [this, socket, buffer]() {
+            *buffer += socket->readAll();
+            if (buffer->indexOf("\r\n\r\n") < 0)
+                return; // wait for the full header block
+            const bool isGroupsRequest = buffer->contains("/api/groups");
+            if (isGroupsRequest)
+                m_groupsRequestReceived = true;
+            else if (buffer->contains("/api/contacts/sync"))
+                m_contactsSyncRequestReceived = true;
+            socket->write(isGroupsRequest ? m_groupsResponse : m_contactsSyncResponse);
+            socket->flush();
+            socket->disconnectFromHost();
+        });
+    }
+
+    QTcpServer m_server;
+    QByteArray m_contactsSyncResponse;
+    QByteArray m_groupsResponse;
+    bool m_groupsRequestReceived = false;
+    bool m_contactsSyncRequestReceived = false;
+};
+
+} // namespace
 
 class ContactsControllerTest : public QObject
 {
@@ -30,8 +98,25 @@ private slots:
     void createContactRejectsBlankName();
     void updateContactRejectsBlankName();
     void syncWithoutPairingSetsNotPairedMessage();
+    void syncSuccessRefreshesGroupsCache();
     void createAndUpdateContactRoundTripExtendedFields();
+
+private:
+    static void savePairing(PairingStore& pairingStore, quint16 port);
 };
+
+void ContactsControllerTest::savePairing(PairingStore& pairingStore, quint16 port)
+{
+    DevicePairing pairing;
+    pairing.subscriberId = QStringLiteral("sub-1");
+    pairing.subscriberHash = QStringLiteral("hash-1");
+    pairing.serverBaseUrl = QStringLiteral("http://127.0.0.1:%1").arg(port);
+    pairing.registrationUrl = QStringLiteral("http://127.0.0.1:%1/api/notifications/native/register").arg(port);
+    pairing.pairingToken = QStringLiteral("pair-tok");
+    pairing.deviceId = QStringLiteral("device-1");
+    pairing.deviceName = QStringLiteral("My Linux Desktop");
+    QVERIFY(pairingStore.save(pairing));
+}
 
 void ContactsControllerTest::updateContactPreservesEmailEntriesBeyondIndexZero()
 {
@@ -220,6 +305,66 @@ void ContactsControllerTest::syncWithoutPairingSetsNotPairedMessage()
     // no-network) sync() call.
     QVERIFY(busySpy.count() >= 2);
     QCOMPARE(controller.isBusy(), false);
+}
+
+void ContactsControllerTest::syncSuccessRefreshesGroupsCache()
+{
+    // Review follow-up (Task 2 finding): the line this whole GroupsRepository
+    // design decision exists to wire up -- ContactsController::sync() calling
+    // m_groupsRepository.refresh() in the ContactSyncStatus::Success branch
+    // -- previously had zero automated regression protection, since every
+    // existing sync() test here hit the NotPaired branch. This drives sync()
+    // through a real Success outcome (valid pairing, no pending changes so
+    // ContactSyncRepository::sync() takes the GET pull() branch) and asserts
+    // the *observable effect* of refresh() having actually run: the groups
+    // fetched from the fake server land in GroupsRepository::groups()/
+    // GroupDao's cache. A future refactor that drops or misplaces the
+    // refresh() call would leave the cache empty and fail this test.
+    const QByteArray contactsSyncResponse =
+        httpResponse(200, "OK", R"({"cursor":1,"tooOld":false,"changed":[],"deleted":[]})");
+    const QByteArray groupsResponse =
+        httpResponse(200, "OK", R"([{"id":"group-1","name":"Family","rev":1}])");
+    DualPathFakeRelayServer fake(contactsSyncResponse, groupsResponse);
+
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    GroupDao groupDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+    savePairing(pairingStore, fake.port());
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+    GroupsClient groupsClient(http);
+    GroupsRepository groupsRepository(groupsClient, groupDao, pairingStore);
+
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+    ContactsController controller(repository, groupsRepository);
+
+    QVERIFY(groupsRepository.groups().isEmpty()); // nothing cached before sync()
+
+    controller.sync();
+
+    QCOMPARE(controller.lastError(), QString());
+    QCOMPARE(controller.statusMessage(), QStringLiteral("Synced -- 0 pushed, 0 applied"));
+
+    QVERIFY(fake.contactsSyncRequestReceived());
+    QVERIFY(fake.groupsRequestReceived()); // proves refresh() was actually invoked
+
+    const QVector<Group> cachedGroups = groupsRepository.groups();
+    QCOMPARE(cachedGroups.size(), 1);
+    QCOMPARE(cachedGroups.at(0).id, QStringLiteral("group-1"));
+    QCOMPARE(cachedGroups.at(0).name, QStringLiteral("Family"));
 }
 
 void ContactsControllerTest::createAndUpdateContactRoundTripExtendedFields()
