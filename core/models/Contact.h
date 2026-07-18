@@ -128,5 +128,24 @@ struct Contact
                            // deleted:true} tombstones server-side, every
                            // other field omitted/zero.
 
+    // Marks this as the caller's own contact card -- the (at most one,
+    // enforced server-side) contact whose fields the server folds into the
+    // PGP QR key-exchange response. Read-only on this client: the only
+    // server endpoint that sets it requires a browser session cookie this
+    // client doesn't have (see docs/superpowers/specs/
+    // 2026-07-18-contact-self-and-pgp-qr-card-design.md), so this field is
+    // only ever populated by a pull() and displayed, never set locally.
+    bool isSelf = false;
+
+    // Server-side-only dedupe provenance -- mergedUIDs lists the uids a
+    // survivor absorbed, mergedInto points a loser's tombstone at the
+    // survivor it was folded into. Never shown in any UI here; carried
+    // through unchanged (never invented) purely so an edit-and-push of a
+    // dedupe-survivor contact from this client stops silently wiping this
+    // data server-side (Store.Upsert only special-cases CreatedAt/IsSelf on
+    // update -- anything else the client's JSON omits gets zeroed).
+    QVector<QString> mergedUIDs;
+    std::optional<QString> mergedInto;
+
     bool operator==(const Contact&) const = default;
 };

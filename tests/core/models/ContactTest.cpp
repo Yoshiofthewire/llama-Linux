@@ -45,6 +45,9 @@ void ContactTest::defaultConstructs()
     QVERIFY(!contact.department.has_value());
     QVERIFY(contact.customFields.isEmpty());
     QVERIFY(!contact.pronouns.has_value());
+    QCOMPARE(contact.isSelf, false);
+    QVERIFY(contact.mergedUIDs.isEmpty());
+    QVERIFY(!contact.mergedInto.has_value());
 }
 
 void ContactTest::populatesAndCompares()
@@ -82,6 +85,9 @@ void ContactTest::populatesAndCompares()
     contact.department = QStringLiteral("Engineering");
     contact.customFields = {ContactCustomFieldEntry{QStringLiteral("Employee ID"), QStringLiteral("42")}};
     contact.pronouns = QStringLiteral("she/her");
+    contact.isSelf = true;
+    contact.mergedUIDs = {QStringLiteral("merged-1"), QStringLiteral("merged-2")};
+    contact.mergedInto = QStringLiteral("survivor-uid");
 
     Contact copy = contact;
     QCOMPARE(copy, contact);
