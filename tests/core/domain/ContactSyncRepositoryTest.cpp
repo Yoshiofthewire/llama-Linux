@@ -29,6 +29,9 @@ private slots:
     void localDeleteOfSyncedContactSendsTombstone();
     void unsyncedLocalDeleteLeavesNoTombstone();
     void serverEditUpdatesExistingContact();
+    void serverIsSelfFlagSurvivesSync();
+    void serverFullSyncAppliesExtendedFields();
+    void serverEditPreservesExtendedFieldsWhenOmitted();
     void tooOldResetsCursorAndCache();
     void findByUidReturnsContactWhenPresent();
     void findByUidReturnsNulloptWhenAbsent();
@@ -315,6 +318,191 @@ void ContactSyncRepositoryTest::serverEditUpdatesExistingContact()
     // blind insertOrReplace(c) overwrite.
     QVERIFY(updated->emails.size() == 1);
     QCOMPARE(updated->emails.at(0).value, QStringLiteral("ada@example.com"));
+}
+
+void ContactSyncRepositoryTest::serverIsSelfFlagSurvivesSync()
+{
+    // Reproduces the reported bug: the server sends a full Contact with
+    // isSelf/mergedUIDs/mergedInto set (ContactWire::contactFromJson parses
+    // them correctly off the wire), but ContactSyncRepository::sync()'s
+    // mergeContact() only copies a fixed allowlist of fields into the
+    // Contact actually persisted to ContactDao -- isSelf/mergedUIDs/
+    // mergedInto aren't on that list, so they're silently dropped before
+    // ever reaching SQLite, even though the wire parse itself is correct.
+    const QByteArray body = R"({"cursor":5,"tooOld":false,"changed":[)"
+                             R"({"uid":"srv-1","rev":5,"fn":"Me","isSelf":true,)"
+                             R"("mergedUIDs":["loser-1"],"mergedInto":"survivor-1"})"
+                             R"(],"deleted":[]})";
+    FakeRelayServer fake(httpResponse(200, "OK", body));
+
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+    savePairing(pairingStore, fake.port());
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+
+    const ContactSyncOutcome outcome = repository.sync();
+    QCOMPARE(outcome.status, ContactSyncStatus::Success);
+    QCOMPARE(outcome.summary.applied, 1);
+
+    const std::optional<Contact> synced = contactDao.findById(QStringLiteral("srv-1"));
+    QVERIFY(synced.has_value());
+    QCOMPARE(synced->isSelf, true);
+    QCOMPARE(synced->mergedUIDs, QVector<QString>({ QStringLiteral("loser-1") }));
+    QCOMPARE(synced->mergedInto, std::optional<QString>(QStringLiteral("survivor-1")));
+}
+
+void ContactSyncRepositoryTest::serverFullSyncAppliesExtendedFields()
+{
+    // Reproduces the sibling bug found alongside isSelf: mergeContact()
+    // predates the extended-contact-fields feature and never learned about
+    // any of groupIDs/photoRef/pgpKey/ims/websites/relations/events/
+    // phoneticGivenName/phoneticFamilyName/department/customFields/
+    // pronouns either -- every one of them was silently dropped on every
+    // sync pull, for every contact, regardless of isSelf.
+    const QByteArray body = R"({"cursor":7,"tooOld":false,"changed":[)"
+                             R"({"uid":"srv-1","rev":7,"fn":"Ada","groupIDs":["group-1"],)"
+                             R"("photoRef":"photo-ref-1","pgpKey":"-----BEGIN PGP PUBLIC KEY BLOCK-----",)"
+                             R"("ims":[{"service":"Matrix","value":"@ada:example.org"}],)"
+                             R"("websites":[{"label":"blog","value":"https://ada.example.com"}],)"
+                             R"("relations":[{"label":"spouse","name":"William King"}],)"
+                             R"("events":[{"label":"anniversary","date":"2026-06-01"}],)"
+                             R"("phoneticGivenName":"Ay-da","phoneticFamilyName":"Love-lace",)"
+                             R"("department":"Engineering",)"
+                             R"("customFields":[{"label":"Employee ID","value":"42"}],)"
+                             R"("pronouns":"she/her"})"
+                             R"(],"deleted":[]})";
+    FakeRelayServer fake(httpResponse(200, "OK", body));
+
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+    savePairing(pairingStore, fake.port());
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+
+    const ContactSyncOutcome outcome = repository.sync();
+    QCOMPARE(outcome.status, ContactSyncStatus::Success);
+    QCOMPARE(outcome.summary.applied, 1);
+
+    const std::optional<Contact> synced = contactDao.findById(QStringLiteral("srv-1"));
+    QVERIFY(synced.has_value());
+    QCOMPARE(synced->groupIds, QVector<QString>({ QStringLiteral("group-1") }));
+    QCOMPARE(synced->photoRef, std::optional<QString>(QStringLiteral("photo-ref-1")));
+    QCOMPARE(synced->pgpKey, std::optional<QString>(QStringLiteral("-----BEGIN PGP PUBLIC KEY BLOCK-----")));
+    QCOMPARE(synced->ims.size(), 1);
+    QCOMPARE(synced->ims.at(0).value, QStringLiteral("@ada:example.org"));
+    QCOMPARE(synced->websites.size(), 1);
+    QCOMPARE(synced->websites.at(0).value, QStringLiteral("https://ada.example.com"));
+    QCOMPARE(synced->relations.size(), 1);
+    QCOMPARE(synced->relations.at(0).name, QStringLiteral("William King"));
+    QCOMPARE(synced->events.size(), 1);
+    QCOMPARE(synced->events.at(0).date, QStringLiteral("2026-06-01"));
+    QCOMPARE(synced->phoneticGivenName, std::optional<QString>(QStringLiteral("Ay-da")));
+    QCOMPARE(synced->phoneticFamilyName, std::optional<QString>(QStringLiteral("Love-lace")));
+    QCOMPARE(synced->department, std::optional<QString>(QStringLiteral("Engineering")));
+    QCOMPARE(synced->customFields.size(), 1);
+    QCOMPARE(synced->customFields.at(0).value, QStringLiteral("42"));
+    QCOMPARE(synced->pronouns, std::optional<QString>(QStringLiteral("she/her")));
+}
+
+void ContactSyncRepositoryTest::serverEditPreservesExtendedFieldsWhenOmitted()
+{
+    // Mirrors serverEditUpdatesExistingContact's emails-preservation check,
+    // extended to every extended-contact-fields field: a delta response
+    // that omits them entirely must not wipe out the locally-cached values.
+    const QByteArray body = R"({"cursor":9,"tooOld":false,"changed":[)"
+                             R"({"uid":"srv-1","rev":4,"fn":"Ada L."})"
+                             R"(],"deleted":[]})";
+    FakeRelayServer fake(httpResponse(200, "OK", body));
+
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    Contact existing;
+    existing.uid = QStringLiteral("srv-1");
+    existing.rev = 1;
+    existing.fn = QStringLiteral("Ada");
+    existing.groupIds = { QStringLiteral("group-1") };
+    existing.photoRef = QStringLiteral("photo-ref-1");
+    existing.pgpKey = QStringLiteral("-----BEGIN PGP PUBLIC KEY BLOCK-----");
+    existing.ims = { ContactImEntry{ QStringLiteral("Matrix"), std::nullopt, QStringLiteral("@ada:example.org") } };
+    existing.websites = { ContactUrlEntry{ QStringLiteral("blog"), QStringLiteral("https://ada.example.com") } };
+    existing.relations = { ContactRelationEntry{ QStringLiteral("spouse"), QStringLiteral("William King") } };
+    existing.events = { ContactEventEntry{ QStringLiteral("anniversary"), QStringLiteral("2026-06-01") } };
+    existing.phoneticGivenName = QStringLiteral("Ay-da");
+    existing.phoneticFamilyName = QStringLiteral("Love-lace");
+    existing.department = QStringLiteral("Engineering");
+    existing.customFields = { ContactCustomFieldEntry{ QStringLiteral("Employee ID"), QStringLiteral("42") } };
+    existing.pronouns = QStringLiteral("she/her");
+    QVERIFY(contactDao.insertOrReplace(existing));
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+    savePairing(pairingStore, fake.port());
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+
+    const ContactSyncOutcome outcome = repository.sync();
+    QCOMPARE(outcome.status, ContactSyncStatus::Success);
+    QCOMPARE(outcome.summary.applied, 1);
+
+    const std::optional<Contact> updated = contactDao.findById(QStringLiteral("srv-1"));
+    QVERIFY(updated.has_value());
+    QCOMPARE(*updated->fn, QStringLiteral("Ada L."));
+    QCOMPARE(updated->groupIds, QVector<QString>({ QStringLiteral("group-1") }));
+    QCOMPARE(updated->photoRef, std::optional<QString>(QStringLiteral("photo-ref-1")));
+    QCOMPARE(updated->pgpKey, std::optional<QString>(QStringLiteral("-----BEGIN PGP PUBLIC KEY BLOCK-----")));
+    QCOMPARE(updated->ims.size(), 1);
+    QCOMPARE(updated->websites.size(), 1);
+    QCOMPARE(updated->relations.size(), 1);
+    QCOMPARE(updated->events.size(), 1);
+    QCOMPARE(updated->phoneticGivenName, std::optional<QString>(QStringLiteral("Ay-da")));
+    QCOMPARE(updated->phoneticFamilyName, std::optional<QString>(QStringLiteral("Love-lace")));
+    QCOMPARE(updated->department, std::optional<QString>(QStringLiteral("Engineering")));
+    QCOMPARE(updated->customFields.size(), 1);
+    QCOMPARE(updated->pronouns, std::optional<QString>(QStringLiteral("she/her")));
 }
 
 void ContactSyncRepositoryTest::tooOldResetsCursorAndCache()

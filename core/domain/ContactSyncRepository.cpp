@@ -35,15 +35,18 @@ QString nowUtc()
 
 // A partial delta response (e.g. only fn+phones present) must not null out
 // fields the server didn't include -- every std::optional<QString> field
-// takes the response's value if present, else falls back to the existing
-// cached value. The three array fields (emails/phones/addresses) can't
-// distinguish "server omitted this field because unchanged" from "server
-// explicitly cleared it to empty" -- the wire's omitempty convention
-// produces the same empty JSON array either way -- so they take the
-// response's value only when non-empty, else fall back to the existing
-// cached value too; preserving existing data on any ambiguous empty
-// response is the safer failure mode of the two. uid/rev always take the
-// response's value directly (never merged).
+// (including the extended-contact-fields and self/dedupe additions) takes
+// the response's value if present, else falls back to the existing cached
+// value. Every QVector<T> field (emails/phones/addresses/groupIds/ims/
+// websites/relations/events/customFields/mergedUIDs) can't distinguish
+// "server omitted this field because unchanged" from "server explicitly
+// cleared it to empty" -- the wire's omitempty convention produces the same
+// empty JSON array either way -- so they take the response's value only
+// when non-empty, else fall back to the existing cached value too;
+// preserving existing data on any ambiguous empty response is the safer
+// failure mode of the two. uid/rev/isSelf/deleted are taken directly from
+// the response (never merged) -- plain bools have no "omitted" state to
+// disambiguate, and uid/rev are always authoritative from the server.
 Contact mergeContact(const Contact& c, const std::optional<Contact>& existing)
 {
     Contact merged;
@@ -66,6 +69,30 @@ Contact mergeContact(const Contact& c, const std::optional<Contact>& existing)
     merged.phones = !c.phones.isEmpty() ? c.phones : (existing ? existing->phones : QVector<ContactPhoneEntry>{});
     merged.addresses =
         !c.addresses.isEmpty() ? c.addresses : (existing ? existing->addresses : QVector<ContactAddressEntry>{});
+    merged.groupIds = !c.groupIds.isEmpty() ? c.groupIds : (existing ? existing->groupIds : QVector<QString>{});
+    merged.photoRef = c.photoRef ? c.photoRef : (existing ? existing->photoRef : std::nullopt);
+    merged.pgpKey = c.pgpKey ? c.pgpKey : (existing ? existing->pgpKey : std::nullopt);
+    merged.ims = !c.ims.isEmpty() ? c.ims : (existing ? existing->ims : QVector<ContactImEntry>{});
+    merged.websites = !c.websites.isEmpty() ? c.websites : (existing ? existing->websites : QVector<ContactUrlEntry>{});
+    merged.relations =
+        !c.relations.isEmpty() ? c.relations : (existing ? existing->relations : QVector<ContactRelationEntry>{});
+    merged.events = !c.events.isEmpty() ? c.events : (existing ? existing->events : QVector<ContactEventEntry>{});
+    merged.phoneticGivenName =
+        c.phoneticGivenName ? c.phoneticGivenName : (existing ? existing->phoneticGivenName : std::nullopt);
+    merged.phoneticFamilyName =
+        c.phoneticFamilyName ? c.phoneticFamilyName : (existing ? existing->phoneticFamilyName : std::nullopt);
+    merged.department = c.department ? c.department : (existing ? existing->department : std::nullopt);
+    merged.customFields = !c.customFields.isEmpty()
+        ? c.customFields
+        : (existing ? existing->customFields : QVector<ContactCustomFieldEntry>{});
+    merged.pronouns = c.pronouns ? c.pronouns : (existing ? existing->pronouns : std::nullopt);
+    // isSelf/deleted are plain bools with no way to distinguish "server
+    // omitted this" from "server explicitly cleared it" -- like deleted
+    // below, the response's value is authoritative and taken directly.
+    merged.isSelf = c.isSelf;
+    merged.mergedUIDs =
+        !c.mergedUIDs.isEmpty() ? c.mergedUIDs : (existing ? existing->mergedUIDs : QVector<QString>{});
+    merged.mergedInto = c.mergedInto ? c.mergedInto : (existing ? existing->mergedInto : std::nullopt);
     merged.deleted = c.deleted;
     return merged;
 }
