@@ -57,7 +57,7 @@ Item {
     // subtree so it never mutates what's on screen.
     readonly property string sanitizerScript: "
         (function() {
-            var allowedTags = ['P', 'BR', 'DIV', 'B', 'STRONG', 'I', 'EM', 'A', 'BLOCKQUOTE'];
+            var allowedTags = ['P', 'BR', 'DIV', 'B', 'STRONG', 'I', 'EM', 'U', 'A', 'BLOCKQUOTE'];
             var allowedStyleProps = ['color', 'background-color', 'padding', 'border-radius',
                                       'display', 'font-weight', 'text-decoration', 'border'];
             function isSafeUrl(url) {
@@ -113,6 +113,11 @@ Item {
                 icon: "format-text-italic"
                 tooltip: i18n("Italic")
                 onClicked: webView.runJavaScript("document.execCommand('italic')")
+            }
+            IconButton {
+                icon: "format-text-underline"
+                tooltip: i18n("Underline")
+                onClicked: webView.runJavaScript("document.execCommand('underline')")
             }
             IconButton {
                 icon: "insert-link"
