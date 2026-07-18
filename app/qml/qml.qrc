@@ -1,5 +1,6 @@
 <RCC>
   <qresource prefix="/qml">
+    <file>Root.qml</file>
     <file>MobileRoot.qml</file>
     <file>DesktopRoot.qml</file>
     <file>utils/format.js</file>

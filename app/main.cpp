@@ -531,7 +531,7 @@ int main(int argc, char* argv[])
     // for why: deprecated since 6.8, this is its replacement).
     KLocalization::setupLocalizedContext(&engine);
 
-    engine.load(QUrl(QStringLiteral("qrc:/qml/MobileRoot.qml")));
+    engine.load(QUrl(QStringLiteral("qrc:/qml/Root.qml")));
     if (engine.rootObjects().isEmpty())
         return -1;
 
