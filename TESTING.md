@@ -90,10 +90,24 @@ default/bare User-Agent strings (see `AGENTS.md` Section 8).
       `true` return before the row visually resolves the swipe action.
       (Spam is accessible only via the "Junk" button in EmailDetail.qml,
       not as an Inbox swipe action.)
-- [ ] **Compose sends.** Open Compose, fill recipient/subject/body,
-      optionally attach a file (`root.attachmentPaths`), send. Expected:
-      `MailApp.sendMail(...)` returns success and the composed message
-      shows up in Sent on next refresh.
+- [ ] **Compose sends rich HTML.** Open Compose, fill recipient/subject,
+      write a body using Bold/Italic and the Hyperlink toolbar action
+      (`app/qml/components/RichBodyEditor.qml`) -- including at least one
+      link with "Style as button" checked -- optionally attach a file
+      (`root.attachmentPaths`), send. Expected: `MailApp.sendMail(...)`
+      passes `mode: "html"` (`MailController::sendMail`,
+      `app/mail/MailController.cpp`) and the composed message shows up in
+      Sent on next refresh, rendering the formatting/button correctly when
+      viewed from another mail client.
+- [ ] **Pasting into the body is forced to plain text.** Copy formatted
+      content from a webpage and paste it into the Compose body. Expected:
+      it lands as plain text (no fonts/colors/scripts carried over) --
+      RichBodyEditor's paste handler always calls
+      `document.execCommand('insertText', ...)` with the clipboard's
+      plain-text data, never the rich HTML variant.
+- [ ] **A `javascript:` URL is rejected in the Hyperlink dialog.** Expected:
+      a validation message appears and nothing is inserted into the body --
+      only `http://`, `https://`, and `mailto:` are accepted.
 - [ ] **EmailDetail renders the HTML body safely.** Open any HTML email.
       Expected: the body renders inside the `WebEngineView`
       (`app/qml/pages/EmailDetail.qml`) with **no JavaScript execution and
