@@ -38,7 +38,7 @@ QVariant ContactListModel::data(const QModelIndex& index, int role) const
     case PrimaryPhoneRole:
         return contact.phones.isEmpty() ? QString() : contact.phones.first().value;
     case SyncedRole:
-        return contact.rev != 0; // see the class doc comment in ContactListModel.h
+        return !m_pendingUids.contains(contact.uid); // see the class doc comment in ContactListModel.h
     case PhotoRefRole:
         return contact.photoRef.value_or(QString());
     default:
@@ -63,10 +63,11 @@ QHash<int, QByteArray> ContactListModel::roleNames() const
     };
 }
 
-void ContactListModel::setContacts(const QVector<Contact>& contacts)
+void ContactListModel::setContacts(const QVector<Contact>& contacts, const QSet<QString>& pendingUids)
 {
     beginResetModel();
     m_contacts = contacts;
+    m_pendingUids = pendingUids;
     endResetModel();
 }
 

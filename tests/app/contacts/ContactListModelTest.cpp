@@ -11,7 +11,7 @@ class ContactListModelTest : public QObject
 private slots:
     void rowCountAndContactAtReflectSetContacts();
     void dataRoundTripsEveryRoleForAPopulatedRow();
-    void syncedRoleReflectsRevZeroVsNonZero();
+    void syncedRoleReflectsPendingUidSet();
     void contactAtOutOfRangeReturnsDefaultConstructedContact();
     void dataOutOfRangeReturnsInvalidVariant();
 
@@ -80,22 +80,23 @@ void ContactListModelTest::dataRoundTripsEveryRoleForAPopulatedRow()
     QCOMPARE(roles.value(ContactListModel::PhotoRefRole), QByteArrayLiteral("photoRef"));
 }
 
-void ContactListModelTest::syncedRoleReflectsRevZeroVsNonZero()
+void ContactListModelTest::syncedRoleReflectsPendingUidSet()
 {
-    // rev == 0 is the chosen "never round-tripped through a successful
-    // sync" signal (see ContactListModel.h's doc comment) -- a freshly
-    // queued create has rev at its Contact-struct default (0) until sync()
-    // applies a server response and overwrites it with a real rev.
+    // synced == !pendingUids.contains(uid) (see ContactListModel.h's doc
+    // comment) -- membership in the pending-uid set supplied alongside
+    // setContacts() is the real ground truth, not any field on Contact
+    // itself. rev is set identically on both rows here to prove the role
+    // no longer derives from rev at all.
     Contact unsynced;
     unsynced.uid = QStringLiteral("temp-local-uid");
-    unsynced.rev = 0;
+    unsynced.rev = 1;
     unsynced.fn = QStringLiteral("Not Yet Synced");
 
     Contact synced = sampleContact();
     synced.rev = 1;
 
     ContactListModel model;
-    model.setContacts({ unsynced, synced });
+    model.setContacts({ unsynced, synced }, { QStringLiteral("temp-local-uid") });
 
     QCOMPARE(model.data(model.index(0, 0), ContactListModel::SyncedRole).toBool(), false);
     QCOMPARE(model.data(model.index(1, 0), ContactListModel::SyncedRole).toBool(), true);

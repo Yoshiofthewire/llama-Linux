@@ -95,6 +95,12 @@ public slots:
     bool updateContact(const QString& uid, const QVariantMap& fields); // loads existing Contact via repository.contacts()/find-by-uid, applies fields, calls repository.queueUpdate(); returns false if uid not found or fn blank
     bool deleteContact(const QString& uid, qint64 rev); // calls repository.queueDelete(uid, rev)
 
+    // Real synced/pending read for a single uid, replacing the old
+    // rev!=0-on-Contact heuristic ContactDetail.qml used to duplicate (see
+    // ContactListModel::SyncedRole's doc comment). false for a uid that
+    // doesn't exist at all, as well as one with a queued pending change.
+    Q_INVOKABLE bool isSynced(const QString& uid);
+
     // extended-contact-fields Task 5: backs the edit form's group-assignment
     // checkbox list -- QVariantList<QVariantMap {id, name}>, one entry per
     // m_groupsRepository.groups() (Task 2's local name-cache, refreshed once

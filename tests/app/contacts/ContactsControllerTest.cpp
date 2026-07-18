@@ -155,6 +155,7 @@ class ContactsControllerTest : public QObject
 
 private slots:
     void updateContactPreservesEmailEntriesBeyondIndexZero();
+    void isSyncedReflectsPendingState();
     void createContactRejectsBlankName();
     void updateContactRejectsBlankName();
     void syncWithoutPairingSetsNotPairedMessage();
@@ -227,7 +228,7 @@ void ContactsControllerTest::updateContactPreservesEmailEntriesBeyondIndexZero()
 
     Contact seed;
     seed.uid = QStringLiteral("srv-1");
-    seed.rev = 1; // already synced
+    seed.rev = 1; // seeded directly into contactDao, no pendingDao row -- reads as synced under isSynced()
     seed.fn = QStringLiteral("Old Name");
     seed.emails = { ContactEmailEntry{ std::nullopt, QStringLiteral("old@example.com") },
                      ContactEmailEntry{ QStringLiteral("work"), QStringLiteral("extra@example.com") } };
@@ -259,6 +260,53 @@ void ContactsControllerTest::updateContactPreservesEmailEntriesBeyondIndexZero()
     QVERIFY(model != nullptr);
     QCOMPARE(model->rowCount(), 1);
     QCOMPARE(model->data(model->index(0, 0), ContactListModel::FnRole).toString(), QStringLiteral("New Name"));
+}
+
+void ContactsControllerTest::isSyncedReflectsPendingState()
+{
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    GroupDao groupDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+    GroupsClient groupsClient(http);
+    GroupsRepository groupsRepository(groupsClient, groupDao, pairingStore);
+    ContactPhotoClient photoClient(http);
+    QTemporaryDir photoCacheDir;
+    QVERIFY(photoCacheDir.isValid());
+    ContactPhotoCache photoCache(photoCacheDir.path());
+    ContactPhotoRepository photoRepository(photoClient, photoCache, pairingStore);
+
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+    ContactsController controller(repository, groupsRepository, photoRepository);
+
+    // Unknown uid: never existed, not synced.
+    QVERIFY(!controller.isSynced(QStringLiteral("does-not-exist")));
+
+    // createContact() queues a create -- pending, not yet synced.
+    QVariantMap fields;
+    fields[QStringLiteral("fn")] = QStringLiteral("Fresh Contact");
+    const QString newUid = controller.createContact(fields);
+    QVERIFY(!newUid.isEmpty());
+    QVERIFY(!controller.isSynced(newUid));
+
+    // Simulate what a successful sync() does to the pending table (no live
+    // server round trip needed to prove isSynced() reads it correctly).
+    pendingDao.deleteAll();
+    QVERIFY(controller.isSynced(newUid));
 }
 
 void ContactsControllerTest::createContactRejectsBlankName()

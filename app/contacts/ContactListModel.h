@@ -4,6 +4,8 @@
 
 #include <QAbstractListModel>
 #include <QHash>
+#include <QSet>
+#include <QString>
 #include <QVariant>
 #include <QVector>
 
@@ -17,32 +19,20 @@
 // struct (including every email/phone/address entry) is available to QML
 // for the edit form via ContactsController::contactAt(uid) instead.
 //
-// synced role: `rev != 0`. Task 33's brief flags a real gap here --
-// ContactSyncRepository::queueCreate() (see its .cpp) assigns a temp local
-// uid to a freshly-created-but-not-yet-synced contact *immediately*, so
-// `uid.isEmpty()` is NOT a usable "is this synced" test (every local
-// contact, synced or not, has a non-empty uid). There is currently no field
-// on core/models/Contact.h that distinguishes "temp local uid" from "real
-// server uid" -- the "Local"/"Synced" badge distinction from both reference
-// clients cannot be built correctly from Contact as it stands today.
-// `rev` is the best available proxy: queueCreate() inserts the local cache
-// row with whatever rev the caller's Contact carried (ContactsController::
-// createContact() always builds a fresh Contact, so this is the struct's
-// rev=0 default), and rev is only ever overwritten with a real value when
-// ContactSyncRepository::sync() applies a server response (mergeContact()
-// always takes the response's rev directly, never merged -- see sync()'s
-// "for (const Contact& c : result.changed)" loop). Confirmed against
-// tests/core/domain/ContactSyncRepositoryTest.cpp's fixtures: every
-// server-returned contact in that suite carries "rev":1 or higher, never 0.
-// So rev==0 reliably means "this row has never round-tripped through a
-// successful sync" for every path that goes through queueCreate()+sync().
-// Limits: this still can't distinguish "queued update not yet pushed" from
-// "successfully synced" (queueUpdate() doesn't touch rev, so an already-
-// synced contact with a pending edit still reads as synced=true, which is
-// arguably the more useful reading for a "Local"/"Synced" badge anyway --
-// the contact IS a real server object, just with an unflushed edit) and
-// theoretically breaks if a server ever legitimately returns rev==0 for a
-// freshly created object (not observed in this codebase's fixtures/tests).
+// synced role: `!pendingUids.contains(contact.uid)`, where pendingUids is
+// supplied by ContactsController::load() from
+// ContactSyncRepository::pendingUids() -- the real ground truth for "is
+// there a queued create/update/delete for this uid that hasn't
+// round-tripped through sync() yet" (see PendingContactChangeDao /
+// ContactSyncRepository.cpp's queueCreate/queueUpdate/queueDelete, which
+// enqueue there, and sync(), which clears the whole table on success).
+// Previously this role used a `rev != 0` proxy on Contact itself, since
+// queueCreate() assigns a temp local uid immediately (so `uid.isEmpty()`
+// was never a usable test) and Contact had no direct synced/pending field.
+// That proxy could not distinguish "queued update not yet pushed" from
+// "successfully synced" and depended on the server never returning rev==0
+// for a fresh object. Querying the pending table directly has neither
+// limitation.
 class ContactListModel : public QAbstractListModel
 {
     Q_OBJECT
@@ -77,9 +67,15 @@ public:
     QVariant data(const QModelIndex& index, int role) const override;
     QHash<int, QByteArray> roleNames() const override;
 
-    void setContacts(const QVector<Contact>& contacts);
+    // pendingUids marks rows with a queued-but-not-yet-synced change (see
+    // this class's own doc comment above) -- pending state and the row set
+    // itself always change together on a real ContactsController::load(),
+    // so this is one call rather than a separate setter that could go
+    // stale between the two.
+    void setContacts(const QVector<Contact>& contacts, const QSet<QString>& pendingUids = {});
     Contact contactAt(int row) const; // out-of-range -> default-constructed Contact
 
 private:
     QVector<Contact> m_contacts;
+    QSet<QString> m_pendingUids;
 };

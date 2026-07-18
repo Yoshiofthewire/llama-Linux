@@ -120,6 +120,19 @@ std::optional<Contact> ContactSyncRepository::findByUid(const QString& uid) cons
     return m_contactDao.findById(uid);
 }
 
+QSet<QString> ContactSyncRepository::pendingUids() const
+{
+    QSet<QString> uids;
+    for (const PendingContactChangeRecord& record : m_pendingDao.findAll())
+        uids.insert(record.contactUid);
+    return uids;
+}
+
+bool ContactSyncRepository::isPending(const QString& uid) const
+{
+    return pendingUids().contains(uid);
+}
+
 QString ContactSyncRepository::queueCreate(Contact contact)
 {
     const QString tempUid = QUuid::createUuid().toString(QUuid::WithoutBraces);

@@ -267,7 +267,14 @@ void ContactsController::setStatusMessage(const QString& message)
 
 void ContactsController::load()
 {
-    m_model->setContacts(m_repository.contacts());
+    m_model->setContacts(m_repository.contacts(), m_repository.pendingUids());
+}
+
+bool ContactsController::isSynced(const QString& uid)
+{
+    if (!m_repository.findByUid(uid).has_value())
+        return false;
+    return !m_repository.isPending(uid);
 }
 
 void ContactsController::sync()

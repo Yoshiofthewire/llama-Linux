@@ -4,6 +4,7 @@
 #include "models/Contact.h"
 #include "net/ContactSyncClient.h" // for ContactDedupeGroup, held by value in ContactDedupeOutcome
 
+#include <QSet>
 #include <QString>
 #include <QVector>
 #include <optional>
@@ -66,6 +67,17 @@ public:
     QVector<Contact> contacts() const; // contactDao.findAll()
 
     std::optional<Contact> findByUid(const QString& uid) const; // contactDao.findById()
+
+    // uids with at least one row in pendingDao -- i.e. queued for the next
+    // sync() and not yet round-tripped through a successful push/pull. This
+    // is the real synced/pending ground truth (replaces the old
+    // rev!=0-on-Contact heuristic ContactListModel/ContactDetail.qml used to
+    // duplicate independently -- see queueDelete()'s own scan below for the
+    // pattern this reuses).
+    QSet<QString> pendingUids() const;
+
+    // Convenience single-uid form of pendingUids(); see its doc comment.
+    bool isPending(const QString& uid) const;
 
     // Assigns a temp local uid (QUuid::createUuid().toString(QUuid::
     // WithoutBraces)), caches it under that uid immediately, and enqueues a

@@ -32,6 +32,7 @@ private slots:
     void tooOldResetsCursorAndCache();
     void findByUidReturnsContactWhenPresent();
     void findByUidReturnsNulloptWhenAbsent();
+    void pendingUidsReflectsQueuedChanges();
     void dedupeWithoutPairingReturnsNotPaired();
     void dedupeSuccessReturnsMergedCountAndGroupsWithoutTouchingCache();
     void dedupeUnauthorizedFrom401MapsStatus();
@@ -416,6 +417,62 @@ void ContactSyncRepositoryTest::findByUidReturnsNulloptWhenAbsent()
     ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
 
     QVERIFY(!repository.findByUid(QStringLiteral("does-not-exist")).has_value());
+}
+
+void ContactSyncRepositoryTest::pendingUidsReflectsQueuedChanges()
+{
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+
+    // Untouched uid: not pending.
+    QVERIFY(!repository.isPending(QStringLiteral("never-touched")));
+    QVERIFY(repository.pendingUids().isEmpty());
+
+    // queueCreate() enqueues a pending row under its assigned temp uid.
+    Contact fresh;
+    fresh.fn = QStringLiteral("New Contact");
+    const QString tempUid = repository.queueCreate(fresh);
+    QVERIFY(repository.isPending(tempUid));
+    QVERIFY(repository.pendingUids().contains(tempUid));
+
+    // queueUpdate() on an already-synced (already-in-contactDao, no prior
+    // pending row) contact enqueues a pending row for its real uid too.
+    Contact existing;
+    existing.uid = QStringLiteral("srv-1");
+    existing.rev = 5;
+    existing.fn = QStringLiteral("Existing");
+    QVERIFY(contactDao.insertOrReplace(existing));
+    QVERIFY(!repository.isPending(QStringLiteral("srv-1")));
+
+    existing.fn = QStringLiteral("Existing, Edited");
+    repository.queueUpdate(existing);
+    QVERIFY(repository.isPending(QStringLiteral("srv-1")));
+    QCOMPARE(repository.pendingUids().size(), 2);
+
+    // pendingDao.deleteAll() is what sync() calls on success -- simulate
+    // that directly here since this test doesn't need a live server round
+    // trip to prove the pending-uid bookkeeping itself.
+    pendingDao.deleteAll();
+    QVERIFY(!repository.isPending(tempUid));
+    QVERIFY(!repository.isPending(QStringLiteral("srv-1")));
+    QVERIFY(repository.pendingUids().isEmpty());
 }
 
 void ContactSyncRepositoryTest::dedupeWithoutPairingReturnsNotPaired()
