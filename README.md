@@ -14,7 +14,7 @@
 
 KyPost is the Linux desktop and KDE Mobile client for a relay-based mail service. It speaks
 no IMAP or SMTP — every bit of mail, contacts, and push-notification traffic goes through the
-`mail.urlxl.com` relay backend. One codebase targets two UI surfaces:
+KyPost relay backend. One codebase targets two UI surfaces:
 
 - **Linux Desktop** — KDE Plasma, packaged as a Flatpak, sidebar/list/detail 3-column layout.
 - **KDE Mobile** — Plasma Mobile, same Flatpak, bottom-tab push-navigation layout.
