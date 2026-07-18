@@ -164,7 +164,8 @@ Item {
 
                         Text {
                             Layout.fillWidth: true
-                            text: model.fn && model.fn.length > 0 ? model.fn : i18n("Unnamed")
+                            text: (model.fn && model.fn.length > 0 ? model.fn : i18n("Unnamed"))
+                                + (model.isSelf ? " · " + i18n("You") : "")
                             color: Theme.inkStrong
                             font.family: Theme.fontUi
                             font.pixelSize: 15

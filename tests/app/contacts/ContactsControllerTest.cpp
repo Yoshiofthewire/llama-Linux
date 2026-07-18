@@ -160,6 +160,7 @@ private slots:
     void updateContactRejectsBlankName();
     void syncWithoutPairingSetsNotPairedMessage();
     void syncSuccessRefreshesGroupsCache();
+    void loadSortsSelfContactFirst();
     void createAndUpdateContactRoundTripExtendedFields();
     void allGroupsReturnsCachedGroupsAsIdNameMaps();
     void dedupeSuccessWithMergesChainsIntoSyncAndReloadsModel();
@@ -528,6 +529,70 @@ void ContactsControllerTest::syncSuccessRefreshesGroupsCache()
     QCOMPARE(cachedGroups.size(), 1);
     QCOMPARE(cachedGroups.at(0).id, QStringLiteral("group-1"));
     QCOMPARE(cachedGroups.at(0).name, QStringLiteral("Family"));
+}
+
+void ContactsControllerTest::loadSortsSelfContactFirst()
+{
+    // contact-self-and-pgp-qr-card Task 4: load() sorts the self-flagged
+    // contact to the front via std::stable_partition, leaving every other
+    // contact's relative order unchanged -- this is a pure in-memory sort
+    // over m_repository.contacts(), no network/pairing involved, so this
+    // fixture mirrors the minimal no-sync tests above (e.g.
+    // createContactRejectsBlankName) rather than the fake-server ones.
+    Database db;
+    QVERIFY(db.open(QStringLiteral(":memory:")));
+    ContactDao contactDao(db.handle());
+    GroupDao groupDao(db.handle());
+    PendingContactChangeDao pendingDao(db.handle());
+
+    Contact notSelf;
+    notSelf.uid = QStringLiteral("c-1");
+    notSelf.fn = QStringLiteral("Alice");
+    QVERIFY(contactDao.insertOrReplace(notSelf));
+
+    Contact self;
+    self.uid = QStringLiteral("c-2");
+    self.fn = QStringLiteral("Me");
+    self.isSelf = true;
+    QVERIFY(contactDao.insertOrReplace(self));
+
+    Contact alsoNotSelf;
+    alsoNotSelf.uid = QStringLiteral("c-3");
+    alsoNotSelf.fn = QStringLiteral("Bob");
+    QVERIFY(contactDao.insertOrReplace(alsoNotSelf));
+
+    QTemporaryDir cursorDir;
+    QVERIFY(cursorDir.isValid());
+    CursorStore cursorStore(cursorDir.filePath(QStringLiteral("cursors.ini")));
+
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore); // never saved -- not paired, fine: this test never syncs
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    ContactSyncClient client(http);
+    GroupsClient groupsClient(http);
+    GroupsRepository groupsRepository(groupsClient, groupDao, pairingStore);
+    ContactPhotoClient photoClient(http);
+    QTemporaryDir photoCacheDir;
+    QVERIFY(photoCacheDir.isValid());
+    ContactPhotoCache photoCache(photoCacheDir.path());
+    ContactPhotoRepository photoRepository(photoClient, photoCache, pairingStore);
+
+    ContactSyncRepository repository(client, contactDao, pendingDao, cursorStore, pairingStore);
+    ContactsController controller(repository, groupsRepository, photoRepository);
+
+    controller.load();
+
+    auto* listModel = qobject_cast<ContactListModel*>(controller.contactModel());
+    QVERIFY(listModel != nullptr);
+    QCOMPARE(listModel->rowCount(), 3);
+    QCOMPARE(listModel->contactAt(0).uid, QStringLiteral("c-2")); // self-contact sorted first
+    // The two non-self contacts keep their original relative order.
+    QCOMPARE(listModel->contactAt(1).uid, QStringLiteral("c-1"));
+    QCOMPARE(listModel->contactAt(2).uid, QStringLiteral("c-3"));
 }
 
 void ContactsControllerTest::createAndUpdateContactRoundTripExtendedFields()

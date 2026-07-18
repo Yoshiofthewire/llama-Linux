@@ -388,6 +388,11 @@ Item {
                             active: root.synced
                             text: root.synced ? i18n("Synced") : i18n("Local")
                         }
+                        StatusBadge {
+                            visible: root.contact.isSelf === true
+                            active: true
+                            text: i18n("Your contact")
+                        }
                     }
                 }
 

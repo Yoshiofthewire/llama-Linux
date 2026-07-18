@@ -59,6 +59,11 @@ public:
         // else is a scalar Contact field, and photoRef is the same shape as
         // those).
         PhotoRefRole,
+        // Read-only display flag -- see core/models/Contact.h's isSelf doc
+        // comment for why this client never sets it, only shows it (a "You"
+        // badge) and uses it to sort the flagged contact to the front of
+        // the list (see ContactsController::load()).
+        IsSelfRole,
     };
 
     explicit ContactListModel(QObject* parent = nullptr);

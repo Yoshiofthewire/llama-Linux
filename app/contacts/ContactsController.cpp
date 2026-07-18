@@ -267,7 +267,14 @@ void ContactsController::setStatusMessage(const QString& message)
 
 void ContactsController::load()
 {
-    m_model->setContacts(m_repository.contacts(), m_repository.pendingUids());
+    // Read-only display sort: the self-contact (if any) always renders
+    // first, per Contact::isSelf's doc comment -- this client never sets
+    // the flag itself, only reads whatever the server already sent over
+    // sync. std::stable_partition keeps every other contact's relative
+    // order unchanged.
+    QVector<Contact> contacts = m_repository.contacts();
+    std::stable_partition(contacts.begin(), contacts.end(), [](const Contact& c) { return c.isSelf; });
+    m_model->setContacts(contacts, m_repository.pendingUids());
 }
 
 bool ContactsController::isSynced(const QString& uid)
@@ -415,6 +422,7 @@ QVariantMap ContactsController::contactAt(const QString& uid)
     map[QStringLiteral("department")] = c.department.value_or(QString());
     map[QStringLiteral("customFields")] = entriesToVariantList(c.customFields, customFieldEntryToMap);
     map[QStringLiteral("pronouns")] = c.pronouns.value_or(QString());
+    map[QStringLiteral("isSelf")] = c.isSelf;
 
     map[QStringLiteral("deleted")] = c.deleted;
     return map;

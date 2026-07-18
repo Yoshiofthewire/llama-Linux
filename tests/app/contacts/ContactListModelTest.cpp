@@ -14,6 +14,7 @@ private slots:
     void syncedRoleReflectsPendingUidSet();
     void contactAtOutOfRangeReturnsDefaultConstructedContact();
     void dataOutOfRangeReturnsInvalidVariant();
+    void isSelfRoleReflectsContactField();
 
 private:
     static Contact sampleContact();
@@ -70,14 +71,34 @@ void ContactListModelTest::dataRoundTripsEveryRoleForAPopulatedRow()
     QCOMPARE(model.data(index, ContactListModel::SyncedRole).toBool(), true); // rev == 3, not 0
     QCOMPARE(model.data(index, ContactListModel::PhotoRefRole).toString(), QStringLiteral("photo-ref-1"));
 
-    // roleNames() must expose exactly these 11 role-name strings for QML.
+    // roleNames() must expose exactly these 12 role-name strings for QML.
     const QHash<int, QByteArray> roles = model.roleNames();
-    QCOMPARE(roles.size(), 11);
+    QCOMPARE(roles.size(), 12);
     QCOMPARE(roles.value(ContactListModel::UidRole), QByteArrayLiteral("uid"));
     QCOMPARE(roles.value(ContactListModel::PrimaryEmailRole), QByteArrayLiteral("primaryEmail"));
     QCOMPARE(roles.value(ContactListModel::PrimaryPhoneRole), QByteArrayLiteral("primaryPhone"));
     QCOMPARE(roles.value(ContactListModel::SyncedRole), QByteArrayLiteral("synced"));
     QCOMPARE(roles.value(ContactListModel::PhotoRefRole), QByteArrayLiteral("photoRef"));
+}
+
+void ContactListModelTest::isSelfRoleReflectsContactField()
+{
+    Contact self = sampleContact();
+    self.isSelf = true;
+    Contact other = sampleContact();
+    other.uid = QStringLiteral("srv-2");
+    other.isSelf = false;
+
+    ContactListModel model;
+    model.setContacts({ self, other });
+
+    QCOMPARE(model.data(model.index(0, 0), ContactListModel::IsSelfRole).toBool(), true);
+    QCOMPARE(model.data(model.index(1, 0), ContactListModel::IsSelfRole).toBool(), false);
+
+    // roleNames() must expose exactly these 12 role-name strings for QML now.
+    const QHash<int, QByteArray> roles = model.roleNames();
+    QCOMPARE(roles.size(), 12);
+    QCOMPARE(roles.value(ContactListModel::IsSelfRole), QByteArrayLiteral("isSelf"));
 }
 
 void ContactListModelTest::syncedRoleReflectsPendingUidSet()

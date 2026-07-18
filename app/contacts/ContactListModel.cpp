@@ -41,6 +41,8 @@ QVariant ContactListModel::data(const QModelIndex& index, int role) const
         return !m_pendingUids.contains(contact.uid); // see the class doc comment in ContactListModel.h
     case PhotoRefRole:
         return contact.photoRef.value_or(QString());
+    case IsSelfRole:
+        return contact.isSelf;
     default:
         return QVariant();
     }
@@ -60,6 +62,7 @@ QHash<int, QByteArray> ContactListModel::roleNames() const
         { PrimaryPhoneRole, "primaryPhone" },
         { SyncedRole, "synced" },
         { PhotoRefRole, "photoRef" },
+        { IsSelfRole, "isSelf" },
     };
 }
 
