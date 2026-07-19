@@ -38,7 +38,7 @@ default/bare User-Agent strings (see `AGENTS.md` Section 8).
       pane shows the `StatusBadge` flip to "Paired" plus the paired
       `Server`/`Device` rows populated (`Pairing.pairedServerHost`,
       `Pairing.deviceId`).
-- [ ] **Deep-link the same URL via `llamamail llamalabels://native-pair?sub=...&hash=...&srv=...&pt=...`**
+- [ ] **Deep-link the same URL via `kypost llamalabels://native-pair?sub=...&hash=...&srv=...&pt=...`**
       (or `xdg-open` once the `.desktop` file's
       `MimeType=x-scheme-handler/llamalabels;` is registered). Expected:
       routed through `main.cpp`'s `routeDeepLink()` →
@@ -395,12 +395,12 @@ accounts) to exercise the full handshake.
 - [ ] **`cmake --install` places files at the correct paths.** Run
       `cmake --build <builddir> && cmake --install <builddir>
       --prefix <some-prefix>` and inspect the installed tree:
-  - `<prefix>/bin/llamamail` (the binary)
+  - `<prefix>/bin/kypost` (the binary)
   - `<prefix>/share/icons/hicolor/{16x16,22x22,24x24,32x32,48x48,64x64,128x128,256x256}/apps/com.urlxl.mail.png`
     and `.../scalable/apps/com.urlxl.mail.svg`
   - `<prefix>/share/applications/com.urlxl.mail.desktop`
   - `<prefix>/share/dbus-1/services/com.urlxl.mail.service`
-  - `<prefix>/share/knotifications6/LlamaMail.notifyrc`
+  - `<prefix>/share/knotifications6/KyPost.notifyrc`
   - `<prefix>/share/metainfo/com.urlxl.mail.metainfo.xml`
     All of these are hardcoded-path-free `install(FILES ...)` rules in
     `app/CMakeLists.txt` (Tasks 44–46), driven by `GNUInstallDirs`.
@@ -455,13 +455,13 @@ accounts) to exercise the full handshake.
       real `flatpak-builder --run` launches, not static review. Final
       confirmed state: a clean full build (`REAL_EXIT_CODE=0`) followed by
       `flatpak-builder --run <builddir> packaging/flatpak/com.urlxl.mail.json
-      llamamail` loading every QML file with no errors and reaching
+      kypost` loading every QML file with no errors and reaching
       `KUnifiedPush::Connector::Registered` with a real
       `unifiedpush.kde.org` endpoint host, live, inside the sandbox.
 - [ ] **i18n fallback-to-English behaves correctly with no `.mo` catalogs
       installed.** Build and launch natively with no locale catalog
       installed anywhere on the system (the expected state right now —
-      zero `.po` files are populated; `po/llamamail.pot` is a fully
+      zero `.po` files are populated; `po/kypost.pot` is a fully
       populated 114-msgid catalog per Task 49's sweep, but nothing has been
       compiled into a `.mo` catalog yet). Expected: every `i18n()`/
       `i18nc()`-wrapped string (114 strings across QML pages/roots and 4

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Task 48: extract i18n()/i18nc()/... call sites into po/llamamail.pot.
+# Task 48: extract i18n()/i18nc()/... call sites into po/kypost.pot.
 #
 # No KDE-source-tree Messages.sh driver (the kde-dev-scripts family:
 # extractrc/extractattr/xml2pot, normally invoked from a framework-provided
@@ -42,7 +42,7 @@ set -eu
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 po_dir="$script_dir"
 repo_root="$po_dir/.."
-pot_file="$po_dir/llamamail.pot"
+pot_file="$po_dir/kypost.pot"
 
 # cd to the repo root and build relative paths from there so xgettext's
 # "#: " reference comments in the .pot are relative (e.g. app/qml/pages/
@@ -61,7 +61,7 @@ trap 'rm -rf "$work_dir"' EXIT
 
 # shellcheck disable=SC2086
 xgettext --c++ --kde --force-po --from-code=UTF-8 \
-    --package-name=llamamail \
+    --package-name=kypost \
     --copyright-holder="Llama Mail" \
     $keywords \
     -o "$work_dir/cpp.pot" \
@@ -69,7 +69,7 @@ xgettext --c++ --kde --force-po --from-code=UTF-8 \
 
 # shellcheck disable=SC2086
 xgettext --language=JavaScript --force-po --from-code=UTF-8 \
-    --package-name=llamamail \
+    --package-name=kypost \
     --copyright-holder="Llama Mail" \
     $keywords \
     -o "$work_dir/qml.pot" \

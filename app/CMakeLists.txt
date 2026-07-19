@@ -1,11 +1,11 @@
-add_executable(llamamail
+add_executable(kypost
   main.cpp
   qml/qml.qrc
 )
 
-target_include_directories(llamamail PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(kypost PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_link_libraries(llamamail PRIVATE
+target_link_libraries(kypost PRIVATE
   llamacore
   Qt6::Quick
   Qt6::Qml
@@ -21,7 +21,7 @@ target_link_libraries(llamamail PRIVATE
 # just the find_package/target_link_libraries to make the plugin available
 # at runtime and satisfy qmllint/IDE tooling.
 find_package(Qt6 REQUIRED COMPONENTS WebEngineQuick)
-target_link_libraries(llamamail PRIVATE Qt6::WebEngineQuick)
+target_link_libraries(kypost PRIVATE Qt6::WebEngineQuick)
 
 # ThemeController wraps core::ThemeManager as a QML singleton (Q_PROPERTY/
 # QColor/qmlRegisterSingletonInstance), so it belongs in the app executable,
@@ -30,7 +30,7 @@ target_link_libraries(llamamail PRIVATE Qt6::WebEngineQuick)
 # find_package/target_link_libraries needed. fonts.qrc bundles the real TTF
 # files ThemeController.fontUi()/fontMono() advertise the family names of;
 # same AUTORCC mechanism already used for qml/qml.qrc.
-target_sources(llamamail PRIVATE
+target_sources(kypost PRIVATE
   theme/ThemeController.cpp
   theme/ThemeController.h
   resources/fonts.qrc
@@ -40,7 +40,7 @@ target_sources(llamamail PRIVATE
 # desktop-only tray settings as a QML singleton ("General") -- plain QObject/
 # QString/bool, no new find_package needed, same reasoning as
 # ThemeController above.
-target_sources(llamamail PRIVATE
+target_sources(kypost PRIVATE
   general/GeneralController.cpp
   general/GeneralController.h
 )
@@ -51,7 +51,7 @@ target_sources(llamamail PRIVATE
 # the core/ boundary rule, same as ThemeController above. No extra
 # find_package needed: QMimeDatabase/QStandardPaths/QFile are already part of
 # Qt6::Core, transitively available via Qt6::Quick.
-target_sources(llamamail PRIVATE
+target_sources(kypost PRIVATE
   mail/EmailListModel.cpp
   mail/EmailListModel.h
   mail/MailController.cpp
@@ -62,7 +62,7 @@ target_sources(llamamail PRIVATE
 # ContactSyncRepository as a QML singleton ("ContactsApp") -- QObject/
 # QAbstractListModel/QVariant, so app/ per the core/ boundary rule, same as
 # MailController/EmailListModel above. No extra find_package needed.
-target_sources(llamamail PRIVATE
+target_sources(kypost PRIVATE
   contacts/ContactFieldMapping.h
   contacts/ContactListModel.cpp
   contacts/ContactListModel.h
@@ -94,13 +94,13 @@ target_sources(llamamail PRIVATE
 # private Qt6MultimediaQuickPrivate.
 find_package(ZXing CONFIG REQUIRED)
 find_package(Qt6 REQUIRED COMPONENTS Multimedia)
-target_sources(llamamail PRIVATE
+target_sources(kypost PRIVATE
   pgp/PgpQrController.cpp
   pgp/PgpQrController.h
   pgp/PgpQrScanner.cpp
   pgp/PgpQrScanner.h
 )
-target_link_libraries(llamamail PRIVATE ZXing::ZXing Qt6::Multimedia)
+target_link_libraries(kypost PRIVATE ZXing::ZXing Qt6::Multimedia)
 
 # PairingController/MfaController (Task 34) wrap core/domain's
 # DeviceRegistrationService/PairingStore and core/net's MfaResponseClient as
@@ -108,7 +108,7 @@ target_link_libraries(llamamail PRIVATE ZXing::ZXing Qt6::Multimedia)
 # core/ boundary rule, same as MailController/ContactsController above. No
 # extra find_package needed: QUrlQuery is already part of Qt6::Core,
 # transitively available via Qt6::Quick.
-target_sources(llamamail PRIVATE
+target_sources(kypost PRIVATE
   pairing/MfaController.cpp
   pairing/MfaController.h
   pairing/PairingController.cpp
@@ -118,11 +118,11 @@ target_sources(llamamail PRIVATE
 # SecureStoreKeychain talks to the Secret Service over QtDBus, so it belongs
 # in the app executable, never in llamacore.
 find_package(Qt6Keychain REQUIRED)
-target_sources(llamamail PRIVATE
+target_sources(kypost PRIVATE
   platform/SecureStoreKeychain.cpp
   platform/SecureStoreKeychain.h
 )
-target_link_libraries(llamamail PRIVATE Qt6Keychain::Qt6Keychain)
+target_link_libraries(kypost PRIVATE Qt6Keychain::Qt6Keychain)
 
 # UnifiedPushConnector talks to the local KUnifiedPush distributor over
 # D-Bus, so it belongs in the app executable, never in llamacore. The
@@ -133,11 +133,11 @@ target_link_libraries(llamamail PRIVATE Qt6Keychain::Qt6Keychain)
 # the distributor's callback delivery -- see UnifiedPushConnector.cpp.
 find_package(KUnifiedPush REQUIRED)
 find_package(Qt6 REQUIRED COMPONENTS DBus)
-target_sources(llamamail PRIVATE
+target_sources(kypost PRIVATE
   push/UnifiedPushConnector.cpp
   push/UnifiedPushConnector.h
 )
-target_link_libraries(llamamail PRIVATE KUnifiedPush Qt6::DBus)
+target_link_libraries(kypost PRIVATE KUnifiedPush Qt6::DBus)
 
 # PushPayloadParser (pure JSON-bytes -> PushNotification parsing, no QObject)
 # and NotificationDispatcher (wraps KNotification) (Task 40) live in
@@ -147,19 +147,19 @@ target_link_libraries(llamamail PRIVATE KUnifiedPush Qt6::DBus)
 # (confirmed via `pacman -Ql knotifications | grep cmake` and its Targets
 # .cmake file this session), same naming pattern as KF6::DBusAddons below.
 find_package(KF6Notifications REQUIRED)
-target_sources(llamamail PRIVATE
+target_sources(kypost PRIVATE
   push/NotificationDispatcher.cpp
   push/NotificationDispatcher.h
   push/PushPayloadParser.cpp
   push/PushPayloadParser.h
 )
-target_link_libraries(llamamail PRIVATE KF6::Notifications)
+target_link_libraries(kypost PRIVATE KF6::Notifications)
 
 # NtfyTopicProvisioner (Task 43 review-finding fix): generates/persists the
 # EmbeddedSubscriber tier's ntfy topic via SecureStore -- plain QtCore
 # (QRandomGenerator), no extra find_package needed. app/ per the core/
 # boundary rule, same as NotificationDispatcher/PushPayloadParser above.
-target_sources(llamamail PRIVATE
+target_sources(kypost PRIVATE
   push/NtfyTopicProvisioner.cpp
   push/NtfyTopicProvisioner.h
 )
@@ -175,11 +175,11 @@ target_sources(llamamail PRIVATE
 # a QMenu (Qt Widgets), and a QWidget cannot be constructed under a plain
 # QGuiApplication.
 find_package(KF6StatusNotifierItem REQUIRED)
-target_sources(llamamail PRIVATE
+target_sources(kypost PRIVATE
   tray/TrayController.cpp
   tray/TrayController.h
 )
-target_link_libraries(llamamail PRIVATE KF6::StatusNotifierItem)
+target_link_libraries(kypost PRIVATE KF6::StatusNotifierItem)
 
 # KDBusService (KF6DBusAddons) wraps app startup in main.cpp to claim the
 # com.urlxl.mail well-known bus name in Unique mode and emit
@@ -188,7 +188,7 @@ target_link_libraries(llamamail PRIVATE KF6::StatusNotifierItem)
 # over plain QDBusConnection registration for Task 11's D-Bus activation
 # proof. See main.cpp for why org.freedesktop.Application/Activate isn't used.
 find_package(KF6DBusAddons REQUIRED)
-target_link_libraries(llamamail PRIVATE KF6::DBusAddons)
+target_link_libraries(kypost PRIVATE KF6::DBusAddons)
 
 # KI18n (Task 48): i18n()/i18nc() translation-catalog infrastructure.
 # KF6::I18n is found once at the top level (same split as KF6::Kirigami) and
@@ -204,10 +204,10 @@ target_link_libraries(llamamail PRIVATE KF6::DBusAddons)
 # install (klocalizedcontext.h: KI18N_DEPRECATED_VERSION(6, 8, "use
 # KLocalizedQmlContext or KLocalization::setupLocalizedContext() from
 # KF6::I18nQml instead")); see main.cpp for the actual wiring.
-target_link_libraries(llamamail PRIVATE KF6::I18n KF6::I18nQml)
+target_link_libraries(kypost PRIVATE KF6::I18n KF6::I18nQml)
 
 include(GNUInstallDirs)
-install(TARGETS llamamail RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS kypost RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # Install app icon files (Task 44): scalable SVG + rasterized PNGs at
 # standard freedesktop hicolor theme sizes (16, 22, 24, 32, 48, 64, 128, 256 px).
@@ -265,7 +265,7 @@ install(FILES
 )
 
 # Install D-Bus service file (Task 45): activation metadata. The Exec= path
-# (/usr/bin/llamamail) is only correct once make install puts the binary
+# (/usr/bin/kypost) is only correct once make install puts the binary
 # there, which is now the case for real system installs.
 install(FILES
   ${PROJECT_SOURCE_DIR}/packaging/dbus/com.urlxl.mail.service
@@ -275,7 +275,7 @@ install(FILES
 # Install KNotifications config (Task 45): defines notification event types
 # (newMail popup) that NotificationDispatcher (app/push/) can use.
 install(FILES
-  ${PROJECT_SOURCE_DIR}/packaging/flatpak/LlamaMail.notifyrc
+  ${PROJECT_SOURCE_DIR}/packaging/flatpak/KyPost.notifyrc
   DESTINATION ${CMAKE_INSTALL_DATADIR}/knotifications6
 )
 

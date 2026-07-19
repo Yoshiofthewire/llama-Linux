@@ -9,7 +9,7 @@ endfunction()
 
 # Like llama_add_test() above, but for tests that live in app/ rather than
 # llamacore: needs the app/ include directory (so headers under app/ resolve
-# the same way they do for the llamamail target itself) and an explicit
+# the same way they do for the kypost target itself) and an explicit
 # SOURCES list (the extra app/*.cpp files under test, compiled directly into
 # the test binary rather than linked from a library), plus an optional LIBS
 # list for tests that need packages beyond llamacore/Qt6::Test (e.g.

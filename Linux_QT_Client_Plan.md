@@ -12,7 +12,7 @@ two UI roots:
 | Ubuntu Touch (Lomiri) | Kirigami (KF5, bundled in the click) | Clickable → OpenStore | Qt 5.15 | Mobile |
 
 New sibling repo: `~/git/llama-mail-qt` (this repo is Xcode-centric; don't nest).
-Suggested app IDs: `com.urlxl.mail` (Flatpak/Flathub), `llamamail.urlxl`
+Suggested app IDs: `com.urlxl.mail` (Flatpak/Flathub), `kypost.urlxl`
 (click/OpenStore).
 
 ## UI architecture: unified-style app, two roots (like the iOS/macOS app)

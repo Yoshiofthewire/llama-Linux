@@ -27,7 +27,7 @@
         "/app/cleanup-BaseApp.sh"
     ],
 
-    "command": "llamamail",
+    "command": "kypost",
     "finish-args": [
         "--socket=wayland",
         "--socket=fallback-x11",
@@ -227,7 +227,7 @@
             ]
         },
         {
-            "name": "llamamail",
+            "name": "kypost",
             "buildsystem": "cmake-ninja",
             "config-opts": [
                 "-DCMAKE_BUILD_TYPE=Release"

@@ -9,7 +9,7 @@
 # tree at ${CMAKE_INSTALL_PREFIX}/share/locale -- the exact path KI18n's
 # KCatalog machinery searches at runtime (via QStandardPaths::
 # GenericDataLocation + "locale/<lang>/LC_MESSAGES/<domain>.mo") once
-# KLocalizedString::setApplicationDomain("llamamail") has run (see
+# KLocalizedString::setApplicationDomain("kypost") has run (see
 # app/main.cpp).
 #
 # Deliberately NOT ecm_create_qm_loader/ecm_install_po_files_as_qm

@@ -214,7 +214,7 @@ jobs:
   # --- flatpak-builder validation job ---
   #
   # Previously omitted entirely: packaging/flatpak/com.urlxl.mail.json used
-  # to fail deterministically at the llamamail module's CMake configure step
+  # to fail deterministically at the kypost module's CMake configure step
   # (Could NOT find Qt6WebEngineQuick), and a job that fails on literally
   # every push/PR is worse than no job. Resolved 2026-07-17 (see
   # TESTING.md's flatpak-builder checklist item and the manifest's own
@@ -249,7 +249,7 @@ jobs:
       - name: Launch smoke test
         run: |
           timeout 15 flatpak-builder --run build-flatpak \
-            packaging/flatpak/com.urlxl.mail.json llamamail --platform offscreen 2>&1 | tee launch.log
+            packaging/flatpak/com.urlxl.mail.json kypost --platform offscreen 2>&1 | tee launch.log
           if grep -qi "is not a type\|unavailable\|QQmlApplicationEngine failed" launch.log; then
             echo "QML load failure detected in launch output" >&2
             exit 1

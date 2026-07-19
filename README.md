@@ -61,7 +61,7 @@ for the Ubuntu/KDE-neon-archive equivalents): `qt6-base`, `qt6-declarative`, `qt
 ```sh
 flatpak-builder --user --force-clean --install-deps-from=flathub \
   build-flatpak packaging/flatpak/com.urlxl.mail.json
-flatpak-builder --run build-flatpak packaging/flatpak/com.urlxl.mail.json llamamail
+flatpak-builder --run build-flatpak packaging/flatpak/com.urlxl.mail.json kypost
 ```
 
 This is the packaging target for both Linux Desktop and Plasma Mobile. Click/Ubuntu Touch

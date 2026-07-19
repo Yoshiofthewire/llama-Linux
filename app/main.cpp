@@ -171,15 +171,15 @@ int main(int argc, char* argv[])
     // called right after creating the instance of QCoreApplication or one of
     // its subclasses"), so it runs before anything below can call i18n()/
     // i18nc() (KLocalizedContext registration further down, deep-link
-    // routing, etc.). "llamamail" matches po/llamamail.pot's catalog name
+    // routing, etc.). "kypost" matches po/kypost.pot's catalog name
     // (po/CMakeLists.txt's ki18n_install()/po/extract-messages.sh) and the
     // .mo filename that will be installed at
-    // share/locale/<lang>/LC_MESSAGES/llamamail.mo once Task 49 lands real
+    // share/locale/<lang>/LC_MESSAGES/kypost.mo once Task 49 lands real
     // .po files -- there are none yet (phase8-global-constraints.md item 5),
     // so every i18n() call falls back to its literal source-code English
     // text right now, which is the correct, expected behavior for this
     // phase.
-    KLocalizedString::setApplicationDomain("llamamail");
+    KLocalizedString::setApplicationDomain("kypost");
 
     // KDBusService (KF6DBusAddons, confirmed installed via `pacman -Qs
     // kdbusaddons`) claims the well-known bus name in Unique mode. Verified
@@ -228,7 +228,7 @@ int main(int argc, char* argv[])
                           // the link itself.
                           qDebug() << "KDBusService: activateRequested -- argument count:" << arguments.size()
                                     << "workingDirectory:" << workingDirectory;
-                          // Task 12/34: a second `llamamail llamalabels://...` invocation gets
+                          // Task 12/34: a second `kypost llamalabels://...` invocation gets
                           // redirected here instead of spawning a duplicate process -- route
                           // its argv through the same deep-link router used at startup.
                           routeDeepLink(arguments, pairingControllerForDeepLinks);
@@ -305,15 +305,15 @@ int main(int argc, char* argv[])
     // QSqlDatabase& into this object, so treat it as fatal.
     const QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir().mkpath(dataDir);
-    // VibeSec fix: same rationale as settingsDir above -- llamamail.db holds
+    // VibeSec fix: same rationale as settingsDir above -- kypost.db holds
     // full contact records (names, emails, phones, notes, PGP public keys)
     // and mail content in plaintext, and the contact-photos cache directory
     // constructed below also lives under dataDir, so this one chmod covers
     // both.
     QFile::setPermissions(dataDir, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
     Database database;
-    if (!database.open(dataDir + QStringLiteral("/llamamail.db")))
-        qFatal("main: Database::open failed for %s", qPrintable(dataDir + QStringLiteral("/llamamail.db")));
+    if (!database.open(dataDir + QStringLiteral("/kypost.db")))
+        qFatal("main: Database::open failed for %s", qPrintable(dataDir + QStringLiteral("/kypost.db")));
 
     // extended-contact-fields Task 3: on-disk cache for fetched contact
     // photo bytes, keyed by Contact::photoRef -- reuses the same
@@ -545,7 +545,7 @@ int main(int argc, char* argv[])
     // registration (construction above already guarantees that -- a losing
     // instance relays its argv and exits at that point, it doesn't reach
     // here), so also check its own argv for a llamalabels:// URL -- covers
-    // the case where xdg-open launches llamamail fresh (nothing was running
+    // the case where xdg-open launches kypost fresh (nothing was running
     // yet to redirect to). Moved here (versus immediately after KDBusService,
     // where the Task 12 stub ran this) so PairingController already exists
     // to route a native-pair link to.
