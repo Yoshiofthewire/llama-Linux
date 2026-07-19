@@ -75,8 +75,10 @@ void PushNotificationClientTest::firstPullOmitsAfterQueryParam()
     client.pull(endpoint, auth, 0);
 
     const QByteArray request = fake.receivedRequest();
-    QVERIFY(request.contains("sub=sub-1"));
-    QVERIFY(request.contains("hash=hash-1"));
+    QVERIFY(request.contains("X-Kypost-Subscriber-Id: sub-1"));
+    QVERIFY(request.contains("X-Kypost-Subscriber-Hash: hash-1"));
+    QVERIFY(!request.contains("sub=sub-1"));
+    QVERIFY(!request.contains("hash=hash-1"));
     QVERIFY(!request.contains("after="));
 }
 

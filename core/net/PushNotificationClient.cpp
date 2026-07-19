@@ -51,11 +51,11 @@ PushNotificationClient::PushNotificationClient(HttpClient& httpClient)
 
 PullResult PushNotificationClient::pull(const QUrl& pullEndpoint, const RelayAuth& auth, qint64 afterCursor) const
 {
-    QList<QPair<QString, QString>> query = auth.queryItems();
+    QList<QPair<QString, QString>> query;
     if (afterCursor > 0)
         query.append({ QStringLiteral("after"), QString::number(afterCursor) });
 
-    const HttpClient::HttpResult result = m_httpClient.get(pullEndpoint, query);
+    const HttpClient::HttpResult result = m_httpClient.get(pullEndpoint, query, auth.headerItems());
 
     PullResult out;
 
