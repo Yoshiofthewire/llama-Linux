@@ -59,6 +59,7 @@ llama_add_test(TransportStateMachineTest core/domain/TransportStateMachineTest.c
 llama_add_test(PgpQrRepositoryTest core/domain/PgpQrRepositoryTest.cpp)
 
 llama_add_test(NetworkErrorTest core/net/NetworkErrorTest.cpp)
+llama_add_test(RelayAuthTest core/net/RelayAuthTest.cpp)
 llama_add_test(HttpClientTest core/net/HttpClientTest.cpp)
 llama_add_test(NativeRegistrationClientTest core/net/NativeRegistrationClientTest.cpp)
 llama_add_test(PushNotificationClientTest core/net/PushNotificationClientTest.cpp)
