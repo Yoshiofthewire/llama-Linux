@@ -209,11 +209,10 @@ ContactSyncClient::ContactSyncClient(HttpClient& httpClient)
 
 ContactSyncResult ContactSyncClient::pull(const QUrl& serverBaseUrl, const RelayAuth& auth, qint64 since) const
 {
-    QList<QPair<QString, QString>> query = auth.queryItems();
-    query.append({ QStringLiteral("since"), QString::number(since) });
+    const QList<QPair<QString, QString>> query{ { QStringLiteral("since"), QString::number(since) } };
 
-    const HttpClient::HttpResult result =
-        m_httpClient.get(joinUrlPath(serverBaseUrl, QStringLiteral("api/contacts/sync")), query);
+    const HttpClient::HttpResult result = m_httpClient.get(
+        joinUrlPath(serverBaseUrl, QStringLiteral("api/contacts/sync")), query, auth.headerItems());
 
     ContactSyncResult out;
 
@@ -243,8 +242,8 @@ ContactSyncResult ContactSyncClient::push(const QUrl& serverBaseUrl, const Relay
     body[QStringLiteral("baseCursor")] = baseCursor;
     body[QStringLiteral("changes")] = entriesToJson(changes, ContactWire::contactToJson);
 
-    const HttpClient::HttpResult result =
-        m_httpClient.post(joinUrlPath(serverBaseUrl, QStringLiteral("api/contacts/sync")), auth.queryItems(), body);
+    const HttpClient::HttpResult result = m_httpClient.post(
+        joinUrlPath(serverBaseUrl, QStringLiteral("api/contacts/sync")), {}, body, auth.headerItems());
 
     ContactSyncResult out;
 
@@ -270,7 +269,7 @@ ContactSyncResult ContactSyncClient::push(const QUrl& serverBaseUrl, const Relay
 ContactDedupeResult ContactSyncClient::dedupe(const QUrl& serverBaseUrl, const RelayAuth& auth) const
 {
     const HttpClient::HttpResult result = m_httpClient.post(
-        joinUrlPath(serverBaseUrl, QStringLiteral("api/contacts/dedupe")), auth.queryItems(), QJsonObject{});
+        joinUrlPath(serverBaseUrl, QStringLiteral("api/contacts/dedupe")), {}, QJsonObject{}, auth.headerItems());
 
     ContactDedupeResult out;
 

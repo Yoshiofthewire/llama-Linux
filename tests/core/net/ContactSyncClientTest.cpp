@@ -17,14 +17,14 @@ class ContactSyncClientTest : public QObject
 
 private slots:
     void pullRoundTripMapsPopulatedAndAbsentOptionalFieldsIncludingNestedEntries();
-    void pullSendsSinceAndAuthAsQueryParams();
+    void pullSendsSinceAsQueryParamAndAuthAsHeaders();
     void pushRoundTripSendsExactFieldNamesIncludingEmptyUidCreate();
-    void pushSendsBaseCursorAndAuthAsQueryParams();
+    void pushSendsAuthAsHeaders();
     void tooOldTrueSurfacesFlagWithEmptyChangedAndDeleted();
     void pullUnauthorizedFrom401PassesErrorThrough();
     void deletedFieldRoundTripsTrueAndOmittedWhenFalse();
     void dedupeParsesReportIntoMergedCountAndGroups();
-    void dedupeSendsAuthAsQueryParamsAndPostsToApiContactsDedupe();
+    void dedupeSendsAuthAsHeadersAndPostsToApiContactsDedupe();
     void dedupeOnEmptyGroupsReturnsZeroMergedCountNoError();
     void dedupeUnauthorizedFrom401MapsToError();
     void dedupeOnMalformedBodyReturnsDecodingErrorNotCrash();
@@ -263,7 +263,7 @@ void ContactSyncClientTest::pullRoundTripMapsPopulatedAndAbsentOptionalFieldsInc
     QCOMPARE(deleted.emails.at(0).value, QStringLiteral("nolabel@example.com"));
 }
 
-void ContactSyncClientTest::pullSendsSinceAndAuthAsQueryParams()
+void ContactSyncClientTest::pullSendsSinceAsQueryParamAndAuthAsHeaders()
 {
     FakeRelayServer fake(httpResponse(200, "OK", R"({"cursor":0,"tooOld":false,"changed":[],"deleted":[]})"));
     QNetworkAccessManager manager;
@@ -276,9 +276,11 @@ void ContactSyncClientTest::pullSendsSinceAndAuthAsQueryParams()
 
     const QByteArray request = fake.receivedRequest();
     QVERIFY(request.contains("GET /api/contacts/sync?"));
-    QVERIFY(request.contains("sub=sub-9"));
-    QVERIFY(request.contains("hash=hash-9"));
     QVERIFY(request.contains("since=0"));
+    QVERIFY(request.contains("X-Kypost-Subscriber-Id: sub-9"));
+    QVERIFY(request.contains("X-Kypost-Subscriber-Hash: hash-9"));
+    QVERIFY(!request.contains("sub=sub-9"));
+    QVERIFY(!request.contains("hash=hash-9"));
 }
 
 void ContactSyncClientTest::pushRoundTripSendsExactFieldNamesIncludingEmptyUidCreate()
@@ -312,7 +314,7 @@ void ContactSyncClientTest::pushRoundTripSendsExactFieldNamesIncludingEmptyUidCr
     QVERIFY(!result.error.has_value());
     QCOMPARE(result.cursor, qint64(101));
 
-    QVERIFY(fake.receivedRequest().contains("POST /api/contacts/sync?"));
+    QVERIFY(fake.receivedRequest().contains("POST /api/contacts/sync HTTP/1.1"));
 
     const QJsonObject sent = fake.receivedJsonBody();
     QCOMPARE(sent.value(QStringLiteral("baseCursor")).toInt(), 50);
@@ -369,7 +371,7 @@ void ContactSyncClientTest::pushRoundTripSendsExactFieldNamesIncludingEmptyUidCr
     QCOMPARE(sentUpdated.value(QStringLiteral("mergedInto")).toString(), QStringLiteral("survivor-uid"));
 }
 
-void ContactSyncClientTest::pushSendsBaseCursorAndAuthAsQueryParams()
+void ContactSyncClientTest::pushSendsAuthAsHeaders()
 {
     FakeRelayServer fake(httpResponse(200, "OK", R"({"cursor":1,"tooOld":false,"changed":[],"deleted":[]})"));
     QNetworkAccessManager manager;
@@ -381,8 +383,10 @@ void ContactSyncClientTest::pushSendsBaseCursorAndAuthAsQueryParams()
     client.push(serverBaseUrl, auth, 0, {});
 
     const QByteArray request = fake.receivedRequest();
-    QVERIFY(request.contains("sub=sub-7"));
-    QVERIFY(request.contains("hash=hash-7"));
+    QVERIFY(request.contains("X-Kypost-Subscriber-Id: sub-7"));
+    QVERIFY(request.contains("X-Kypost-Subscriber-Hash: hash-7"));
+    QVERIFY(!request.contains("sub=sub-7"));
+    QVERIFY(!request.contains("hash=hash-7"));
 
     const QJsonObject sent = fake.receivedJsonBody();
     QCOMPARE(sent.value(QStringLiteral("baseCursor")).toInt(), 0);
@@ -472,7 +476,7 @@ void ContactSyncClientTest::dedupeParsesReportIntoMergedCountAndGroups()
     QCOMPARE(result.groups.at(1).absorbed, (QVector<QString>{QStringLiteral("c-5")}));
 }
 
-void ContactSyncClientTest::dedupeSendsAuthAsQueryParamsAndPostsToApiContactsDedupe()
+void ContactSyncClientTest::dedupeSendsAuthAsHeadersAndPostsToApiContactsDedupe()
 {
     FakeRelayServer fake(httpResponse(200, "OK", R"({"mergedCount":0,"groups":[]})"));
     QNetworkAccessManager manager;
@@ -484,9 +488,11 @@ void ContactSyncClientTest::dedupeSendsAuthAsQueryParamsAndPostsToApiContactsDed
     client.dedupe(serverBaseUrl, auth);
 
     const QByteArray request = fake.receivedRequest();
-    QVERIFY(request.contains("POST /api/contacts/dedupe?"));
-    QVERIFY(request.contains("sub=sub-9"));
-    QVERIFY(request.contains("hash=hash-9"));
+    QVERIFY(request.contains("POST /api/contacts/dedupe HTTP/1.1"));
+    QVERIFY(request.contains("X-Kypost-Subscriber-Id: sub-9"));
+    QVERIFY(request.contains("X-Kypost-Subscriber-Hash: hash-9"));
+    QVERIFY(!request.contains("sub=sub-9"));
+    QVERIFY(!request.contains("hash=hash-9"));
 }
 
 void ContactSyncClientTest::dedupeOnEmptyGroupsReturnsZeroMergedCountNoError()
