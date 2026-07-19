@@ -108,7 +108,7 @@ void ContactPhotoRepositoryTest::photoPathForFetchesAndCachesOnCacheMiss()
     const QString path = repository.photoPathFor(QStringLiteral("contact-1"), QStringLiteral("photo-ref-1"));
     QVERIFY(!path.isEmpty());
 
-    QVERIFY(fake.receivedRequest().contains("GET /api/contacts/contact-1/photo?"));
+    QVERIFY(fake.receivedRequest().contains("GET /api/contacts/contact-1/photo HTTP/1.1"));
 
     QFile file(path);
     QVERIFY(file.open(QIODevice::ReadOnly));

@@ -124,7 +124,7 @@ void ContactSyncRepositoryTest::fullSyncAssignsUidWithoutDuplicating()
     QCOMPARE(outcome.summary.applied, 1);
     QCOMPARE(outcome.summary.newCursor, qint64(456));
 
-    QVERIFY(fake.receivedRequest().contains("POST /api/contacts/sync?"));
+    QVERIFY(fake.receivedRequest().contains("POST /api/contacts/sync HTTP/1.1"));
     const QJsonObject sent = fake.receivedJsonBody();
     QCOMPARE(sent.value(QStringLiteral("baseCursor")).toInt(), 0);
     const QJsonObject sentChange = sent.value(QStringLiteral("changes")).toArray().at(0).toObject();
@@ -225,7 +225,7 @@ void ContactSyncRepositoryTest::localDeleteOfSyncedContactSendsTombstone()
     const ContactSyncOutcome outcome = repository.sync();
     QCOMPARE(outcome.status, ContactSyncStatus::Success);
 
-    QVERIFY(fake.receivedRequest().contains("POST /api/contacts/sync?"));
+    QVERIFY(fake.receivedRequest().contains("POST /api/contacts/sync HTTP/1.1"));
     const QJsonObject sent = fake.receivedJsonBody();
     const QJsonObject sentChange = sent.value(QStringLiteral("changes")).toArray().at(0).toObject();
     QCOMPARE(sentChange.value(QStringLiteral("uid")).toString(), QStringLiteral("srv-9"));
@@ -727,7 +727,7 @@ void ContactSyncRepositoryTest::dedupeSuccessReturnsMergedCountAndGroupsWithoutT
     QCOMPARE(outcome.groups.at(0).survivor, QStringLiteral("srv-1"));
     QCOMPARE(outcome.groups.at(0).absorbed, (QVector<QString>{QStringLiteral("srv-2")}));
 
-    QVERIFY(fake.receivedRequest().contains("POST /api/contacts/dedupe?"));
+    QVERIFY(fake.receivedRequest().contains("POST /api/contacts/dedupe HTTP/1.1"));
 
     // dedupe() must not touch the local cache -- that's sync()'s job on a
     // subsequent call.

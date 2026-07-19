@@ -88,7 +88,7 @@ void GroupsRepositoryTest::refreshUpsertsGroupsFromServer()
     GroupsRepository repository(client, groupDao, pairingStore);
     repository.refresh();
 
-    QVERIFY(fake.receivedRequest().contains("GET /api/groups?"));
+    QVERIFY(fake.receivedRequest().contains("GET /api/groups HTTP/1.1"));
 
     const QVector<Group> all = repository.groups();
     QCOMPARE(all.size(), 2);

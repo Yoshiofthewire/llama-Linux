@@ -82,7 +82,7 @@ void PgpQrRepositoryTest::fetchMyTokenSuccessReturnsTokenExpiresAtAndUrl()
     QCOMPARE(outcome.token, QStringLiteral("tok-1"));
     QCOMPARE(outcome.expiresAt, QStringLiteral("2026-07-17T12:02:00Z"));
     QCOMPARE(outcome.url, QStringLiteral("https://example.com/api/pgp/qr/key?t=tok-1"));
-    QVERIFY(fake.receivedRequest().contains("GET /api/pgp/qr/token?"));
+    QVERIFY(fake.receivedRequest().contains("GET /api/pgp/qr/token HTTP/1.1"));
 }
 
 void PgpQrRepositoryTest::fetchMyToken400MapsToNoPgpIdentity()

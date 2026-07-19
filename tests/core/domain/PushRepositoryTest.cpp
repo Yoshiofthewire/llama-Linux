@@ -218,7 +218,7 @@ void PushRepositoryTest::storedPullEndpointOverridesDerivedOne()
     PushRepository repository(pushDao, cursorStore, client, pairingStore, settingsStore);
     repository.pullOnce();
 
-    QVERIFY(fake.receivedRequest().contains("GET /custom/pull/path?"));
+    QVERIFY(fake.receivedRequest().contains("GET /custom/pull/path HTTP/1.1"));
 }
 
 void PushRepositoryTest::unsetPullEndpointIsDerivedFromServerBaseUrl()
@@ -253,7 +253,7 @@ void PushRepositoryTest::unsetPullEndpointIsDerivedFromServerBaseUrl()
     PushRepository repository(pushDao, cursorStore, client, pairingStore, settingsStore);
     repository.pullOnce();
 
-    QVERIFY(fake.receivedRequest().contains("GET /api/notifications/native/pull?"));
+    QVERIFY(fake.receivedRequest().contains("GET /api/notifications/native/pull HTTP/1.1"));
 }
 
 void PushRepositoryTest::pullWithoutPairingReturnsEmptyAndMakesNoRequest()

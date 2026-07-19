@@ -947,7 +947,7 @@ void ContactsControllerTest::dedupeSuccessWithZeroMergedSkipsSyncButReloadsModel
     QCOMPARE(controller.statusMessage(), QStringLiteral("No duplicates found"));
 
     // Only the dedupe endpoint should have been hit -- no chained sync().
-    QVERIFY(fake.receivedRequest().contains("POST /api/contacts/dedupe?"));
+    QVERIFY(fake.receivedRequest().contains("POST /api/contacts/dedupe HTTP/1.1"));
     QVERIFY(!fake.receivedRequest().contains("/api/contacts/sync"));
 
     auto* model = qobject_cast<ContactListModel*>(controller.contactModel());
