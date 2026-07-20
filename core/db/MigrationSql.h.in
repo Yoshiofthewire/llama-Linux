@@ -5,17 +5,17 @@
 // Generated at CMake configure time from db/migrations/*.sql (one function
 // per migration file, in filename order) via file(READ) + configure_file —
 // chosen over Qt resource (qrc) embedding because a qrc's static initializer
-// compiled into a *static* library (llamacore) gets dropped by the linker
+// compiled into a *static* library (kypostcore) gets dropped by the linker
 // unless something explicitly references it, which caused the migration to
 // silently no-op (PRAGMA user_version got set with zero tables created). A
 // generated raw C++ string constant per migration has no such gotcha.
-@LLAMA_MIGRATION_FUNCTIONS@
-using LlamaMigrationSqlFn = QString (*)();
+@KYPOST_MIGRATION_FUNCTIONS@
+using KyPostMigrationSqlFn = QString (*)();
 
 // Index i (0-based) holds the SQL for user_version i+1, so Database::open()
-// can walk version+1..kLlamaMigrationCount in a loop instead of needing one
+// can walk version+1..kKyPostMigrationCount in a loop instead of needing one
 // hand-written case per migration.
-inline constexpr int kLlamaMigrationCount = @LLAMA_MIGRATION_COUNT@;
+inline constexpr int kKyPostMigrationCount = @KYPOST_MIGRATION_COUNT@;
 
-inline const LlamaMigrationSqlFn kLlamaMigrationSql[] = {
-@LLAMA_MIGRATION_TABLE_ENTRIES@};
+inline const KyPostMigrationSqlFn kKyPostMigrationSql[] = {
+@KYPOST_MIGRATION_TABLE_ENTRIES@};

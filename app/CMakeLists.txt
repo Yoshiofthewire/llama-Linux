@@ -6,7 +6,7 @@ add_executable(kypost
 target_include_directories(kypost PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(kypost PRIVATE
-  llamacore
+  kypostcore
   Qt6::Quick
   Qt6::Qml
   Qt6::QuickControls2
@@ -25,7 +25,7 @@ target_link_libraries(kypost PRIVATE Qt6::WebEngineQuick)
 
 # ThemeController wraps core::ThemeManager as a QML singleton (Q_PROPERTY/
 # QColor/qmlRegisterSingletonInstance), so it belongs in the app executable,
-# never in llamacore -- Qt6::Gui (QColor) and Qt6::Qml (qmlRegisterSingleton*)
+# never in kypostcore -- Qt6::Gui (QColor) and Qt6::Qml (qmlRegisterSingleton*)
 # are already available transitively via Qt6::Quick above, no new
 # find_package/target_link_libraries needed. fonts.qrc bundles the real TTF
 # files ThemeController.fontUi()/fontMono() advertise the family names of;
@@ -116,7 +116,7 @@ target_sources(kypost PRIVATE
 )
 
 # SecureStoreKeychain talks to the Secret Service over QtDBus, so it belongs
-# in the app executable, never in llamacore.
+# in the app executable, never in kypostcore.
 find_package(Qt6Keychain REQUIRED)
 target_sources(kypost PRIVATE
   platform/SecureStoreKeychain.cpp
@@ -125,7 +125,7 @@ target_sources(kypost PRIVATE
 target_link_libraries(kypost PRIVATE Qt6Keychain::Qt6Keychain)
 
 # UnifiedPushConnector talks to the local KUnifiedPush distributor over
-# D-Bus, so it belongs in the app executable, never in llamacore. The
+# D-Bus, so it belongs in the app executable, never in kypostcore. The
 # KUnifiedPushConfig.cmake package exports a plain "KUnifiedPush" target
 # (no namespace), confirmed against the installed .cmake files. Qt6::DBus is
 # needed directly (not just transitively via KUnifiedPush) because
@@ -142,7 +142,7 @@ target_link_libraries(kypost PRIVATE KUnifiedPush Qt6::DBus)
 # PushPayloadParser (pure JSON-bytes -> PushNotification parsing, no QObject)
 # and NotificationDispatcher (wraps KNotification) (Task 40) live in
 # app/push/, alongside UnifiedPushConnector -- KNotifications is a KF6 system
-# library, never linked into llamacore, same core/ boundary rule. The
+# library, never linked into kypostcore, same core/ boundary rule. The
 # KF6NotificationsConfig.cmake package exports a "KF6::Notifications" target
 # (confirmed via `pacman -Ql knotifications | grep cmake` and its Targets
 # .cmake file this session), same naming pattern as KF6::DBusAddons below.

@@ -9,7 +9,7 @@ struct PushNotification;
 // surface a parsed PushNotification as a desktop notification. Lives in
 // app/push/, alongside UnifiedPushConnector, per the existing core/ boundary
 // rule -- KNotifications is a KF6 system library, never linked into
-// llamacore.
+// kypostcore.
 //
 // Deliberately ignorant of QML/MailController/window focus: Task 42 wires
 // openRequested() to real navigation. This class only builds and sends the

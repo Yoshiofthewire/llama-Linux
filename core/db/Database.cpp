@@ -40,8 +40,8 @@ bool Database::open(const QString& path)
         return false;
     const int version = versionQuery.value(0).toInt();
 
-    for (int nextVersion = version + 1; nextVersion <= kLlamaMigrationCount; ++nextVersion) {
-        const QString sql = kLlamaMigrationSql[nextVersion - 1]();
+    for (int nextVersion = version + 1; nextVersion <= kKyPostMigrationCount; ++nextVersion) {
+        const QString sql = kKyPostMigrationSql[nextVersion - 1]();
         const QStringList statements = sql.split(QLatin1Char(';'), Qt::SkipEmptyParts);
         for (const QString& rawStatement : statements) {
             const QString statement = rawStatement.trimmed();
