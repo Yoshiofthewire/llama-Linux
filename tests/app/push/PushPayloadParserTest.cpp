@@ -77,7 +77,7 @@ void PushPayloadParserTest::genericTestNotificationShapeFallsBackToOuterTitleAnd
     // (server.go's handleNotificationTest, "Send Test Notification" on the
     // web app): only an outer title/body and a bare data.url, no
     // data.messageId, no data.title/data.body at all.
-    const QByteArray body = R"({"title":"Llama Mail Test Notification",)"
+    const QByteArray body = R"({"title":"KyPost Test Notification",)"
                              R"("body":"Push delivery is working across all subscribed devices.",)"
                              R"("data":{"url":"/notifications"}})";
 
@@ -85,7 +85,7 @@ void PushPayloadParserTest::genericTestNotificationShapeFallsBackToOuterTitleAnd
 
     QVERIFY(result.has_value());
     QVERIFY(result->messageId.isEmpty());
-    QCOMPARE(result->title, QStringLiteral("Llama Mail Test Notification"));
+    QCOMPARE(result->title, QStringLiteral("KyPost Test Notification"));
     QCOMPARE(result->body, QStringLiteral("Push delivery is working across all subscribed devices."));
     QCOMPARE(result->url, QStringLiteral("/notifications"));
 }

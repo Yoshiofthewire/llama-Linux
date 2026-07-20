@@ -26,7 +26,7 @@ Database::~Database()
 
 bool Database::open(const QString& path)
 {
-    m_connectionName = QStringLiteral("llama_db_%1").arg(g_connectionCounter.fetchAndAddRelaxed(1));
+    m_connectionName = QStringLiteral("kypost_db_%1").arg(g_connectionCounter.fetchAndAddRelaxed(1));
     m_db = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), m_connectionName);
     m_db.setDatabaseName(path);
     if (!m_db.open())

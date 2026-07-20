@@ -66,7 +66,7 @@ void DatabaseTest::openIsIdempotentOnRealFile()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
-    const QString path = dir.filePath(QStringLiteral("llama-test.sqlite"));
+    const QString path = dir.filePath(QStringLiteral("kypost-test.sqlite"));
 
     {
         Database db1;

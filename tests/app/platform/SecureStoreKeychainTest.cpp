@@ -25,7 +25,7 @@ private:
 
 void SecureStoreKeychainTest::init()
 {
-    m_service = QStringLiteral("llama-mail-securestore-test-%1")
+    m_service = QStringLiteral("kypost-securestore-test-%1")
                     .arg(QUuid::createUuid().toString(QUuid::WithoutBraces));
 }
 

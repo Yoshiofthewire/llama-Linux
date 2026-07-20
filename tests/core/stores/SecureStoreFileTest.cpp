@@ -92,7 +92,7 @@ void SecureStoreFileTest::rejectsKeysThatEscapeTheStoreDirectory()
 
     const QStringList maliciousKeys = {
         QStringLiteral("../escaped-relative"),
-        QStringLiteral("../../../../etc/llama-mail-should-not-be-written"),
+        QStringLiteral("../../../../etc/kypost-should-not-be-written"),
         QStringLiteral("subdir/escaped"),
         QStringLiteral("subdir\\escaped"),
         QStringLiteral("."),
