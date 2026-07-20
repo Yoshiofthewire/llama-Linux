@@ -58,6 +58,18 @@ public:
     static QString pickTitle(const PushNotification& payload);
     static QString pickText(const PushNotification& payload);
 
+    // VibeSec fix: KNotification::setText()'s own doc comment states Plasma
+    // renders the body as Text.StyledText -- supporting clickable <a href>
+    // links and remotely-fetched <img src> images -- whenever the local
+    // notification server advertises the "body-markup" capability (which a
+    // stock Plasma session does). pickTitle()/pickText() above return raw,
+    // attacker-influenceable push content (sender/subject/body); notify()
+    // runs both through this before calling setTitle()/setText() so a
+    // malicious/compromised relay or ntfy publisher can't plant a phishing
+    // link or tracking-pixel image in the desktop notification. Public and
+    // static for the same testability reason as pickTitle/pickText above.
+    static QString sanitizeForNotification(const QString& text);
+
 signals:
     // Emitted when the user activates the notification's default ("View")
     // action.

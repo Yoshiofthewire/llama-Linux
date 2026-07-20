@@ -35,6 +35,11 @@ QString NotificationDispatcher::pickText(const PushNotification& payload)
     return payload.body;
 }
 
+QString NotificationDispatcher::sanitizeForNotification(const QString& text)
+{
+    return text.toHtmlEscaped();
+}
+
 void NotificationDispatcher::notify(const PushNotification& payload)
 {
     // Logging discipline (Phase 7 global constraint 6): never log
@@ -43,8 +48,8 @@ void NotificationDispatcher::notify(const PushNotification& payload)
     // marker.
     qDebug() << "NotificationDispatcher: notifying for messageId" << payload.messageId;
 
-    const QString title = pickTitle(payload);
-    const QString text = pickText(payload);
+    const QString title = sanitizeForNotification(pickTitle(payload));
+    const QString text = sanitizeForNotification(pickText(payload));
 
     // No parent: matches KNotification's own documented lifecycle -- with
     // the default CloseOnTimeout flag it deletes itself once the

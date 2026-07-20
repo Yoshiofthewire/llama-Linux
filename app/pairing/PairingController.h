@@ -153,7 +153,12 @@ private:
     // RegistrationOutcome to pairingState/pairingError, calls
     // refreshFromStore() on success.
     bool pairFromParsedParams(const QString& sub, const QString& srv, const QString& pt, const QString& reg);
-    void setPairingState(const QString& state, const QString& error = QString());
+    // forceNotify: emit pairingStateChanged() even when (state, error) is
+    // unchanged from the current values -- needed when some OTHER piece of
+    // NOTIFY-bound state (e.g. m_pendingPair) changed too, since QML
+    // property bindings only re-evaluate on the declared NOTIFY signal, not
+    // on every call to this setter. See pairFromDeepLink()'s call site.
+    void setPairingState(const QString& state, const QString& error = QString(), bool forceNotify = false);
 
     DeviceRegistrationService& m_service;
     PairingStore& m_pairingStore;

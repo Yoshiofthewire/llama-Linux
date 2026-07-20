@@ -8,6 +8,7 @@
 
 #include <KLocalizedString>
 
+#include <QHostAddress>
 #include <QUrl>
 #include <QUrlQuery>
 
@@ -41,6 +42,32 @@ QString deriveRegistrationUrl(const QString& serverBaseUrl)
     return base + QStringLiteral("/api/notifications/native/register");
 }
 
+// VibeSec finding: a kypost://native-pair link's `srv` accepted any scheme,
+// including http://, with no warning -- and pendingPairHost() (below)
+// strips the scheme entirely before display, so even an attentive user had
+// no way to notice they were about to pair (and send the pairing token +
+// real push deviceToken) in cleartext. https is required except for
+// loopback, which every local/self-hosted-dev pairing flow (and this
+// file's own test suite) legitimately targets over plain http.
+bool isAcceptablePairingScheme(const QUrl& url)
+{
+    if (url.scheme().compare(QStringLiteral("https"), Qt::CaseInsensitive) == 0)
+        return true;
+    if (url.scheme().compare(QStringLiteral("http"), Qt::CaseInsensitive) != 0)
+        return false;
+
+    const QString host = url.host();
+    if (host.compare(QStringLiteral("localhost"), Qt::CaseInsensitive) == 0)
+        return true;
+    QHostAddress addr;
+    return addr.setAddress(host) && addr.isLoopback();
+}
+
+bool sameOrigin(const QUrl& a, const QUrl& b)
+{
+    return a.scheme() == b.scheme() && a.host() == b.host() && a.port() == b.port();
+}
+
 std::optional<ParsedPairingLink> parseNativePairLink(const QUrl& url)
 {
     if (url.scheme() != QStringLiteral("kypost") || url.host() != QStringLiteral("native-pair"))
@@ -59,6 +86,22 @@ std::optional<ParsedPairingLink> parseNativePairLink(const QUrl& url)
 
     if (parsed.subscriberId.isEmpty() || parsed.serverBaseUrl.isEmpty() || parsed.pairingToken.isEmpty())
         return std::nullopt;
+
+    const QUrl serverUrl(parsed.serverBaseUrl);
+    if (!isAcceptablePairingScheme(serverUrl))
+        return std::nullopt;
+
+    // VibeSec finding: `reg` used to be able to point the actual
+    // registration POST (carrying subscriberId/pairingToken/the real push
+    // deviceToken) at a completely different host than `srv` -- the only
+    // value pendingPairHost() (below) ever surfaces to the confirm dialog.
+    // Requiring reg to share srv's origin means the host the user approves
+    // is always the host that's actually contacted.
+    if (!parsed.registrationUrl.isEmpty()) {
+        const QUrl registrationUrl(parsed.registrationUrl);
+        if (!isAcceptablePairingScheme(registrationUrl) || !sameOrigin(registrationUrl, serverUrl))
+            return std::nullopt;
+    }
 
     return parsed;
 }
@@ -127,13 +170,13 @@ QString PairingController::pushServerBaseUrl() const
     return m_settingsStore.pushServerBaseUrl();
 }
 
-void PairingController::setPairingState(const QString& state, const QString& error)
+void PairingController::setPairingState(const QString& state, const QString& error, bool forceNotify)
 {
-    if (m_pairingState == state && m_pairingError == error)
-        return;
+    const bool unchanged = (m_pairingState == state && m_pairingError == error);
     m_pairingState = state;
     m_pairingError = error;
-    emit pairingStateChanged();
+    if (!unchanged || forceNotify)
+        emit pairingStateChanged();
 }
 
 void PairingController::refreshFromStore()
@@ -170,7 +213,13 @@ bool PairingController::pairFromDeepLink(const QUrl& url)
                                                                  : parsed->registrationUrl;
     params.pairingToken = parsed->pairingToken;
     m_pendingPair = params;
-    setPairingState(QStringLiteral("confirm"));
+    // forceNotify=true: VibeSec fix -- m_pendingPair just changed even when
+    // the state label ("confirm") didn't, e.g. a second link arriving while
+    // the confirm dialog from a first link is still open. pendingPairHost
+    // is NOTIFY-bound to pairingStateChanged, so without forcing the emit
+    // here the dialog would keep showing the FIRST link's host while
+    // confirmPendingPair() would actually act on the SECOND link's params.
+    setPairingState(QStringLiteral("confirm"), QString(), /*forceNotify=*/true);
     return true;
 }
 

@@ -23,6 +23,10 @@ private slots:
     void textFallsBackToSubjectWhenEmailSubjectEmpty();
     void textFallsBackToBodyWhenEmailSubjectAndSubjectEmpty();
     void textIsEmptyWhenAllThreeEmpty();
+
+    void sanitizeForNotificationEscapesHtmlMarkup();
+    void sanitizeForNotificationEscapesImgTag();
+    void sanitizeForNotificationLeavesPlainTextUnchanged();
 };
 
 void NotificationDispatcherTest::titleUsesSenderNameWhenPresent()
@@ -104,6 +108,38 @@ void NotificationDispatcherTest::textIsEmptyWhenAllThreeEmpty()
     payload.body.clear();
 
     QVERIFY(NotificationDispatcher::pickText(payload).isEmpty());
+}
+
+void NotificationDispatcherTest::sanitizeForNotificationEscapesHtmlMarkup()
+{
+    // VibeSec regression guard: KNotification renders setText()'s body as
+    // Text.StyledText when the notification server advertises
+    // "body-markup" -- a push payload's sender/subject/body must never
+    // reach it with a clickable phishing <a href> intact.
+    const QString escaped = NotificationDispatcher::sanitizeForNotification(
+        QStringLiteral("<b>SECURITY ALERT:</b> <a href=\"http://evil.example/phish\">Click here</a>"));
+
+    QVERIFY(!escaped.contains(QStringLiteral("<a ")));
+    QVERIFY(!escaped.contains(QStringLiteral("<b>")));
+    QCOMPARE(escaped,
+             QStringLiteral("&lt;b&gt;SECURITY ALERT:&lt;/b&gt; &lt;a href=&quot;http://evil.example/phish&quot;&gt;"
+                             "Click here&lt;/a&gt;"));
+}
+
+void NotificationDispatcherTest::sanitizeForNotificationEscapesImgTag()
+{
+    // Same finding, the remote-image/tracking-pixel half: an unescaped
+    // <img src> in the body fetches immediately with no interaction.
+    const QString escaped =
+        NotificationDispatcher::sanitizeForNotification(QStringLiteral("<img src=\"http://evil.example/px.gif\">"));
+
+    QVERIFY(!escaped.contains(QStringLiteral("<img")));
+}
+
+void NotificationDispatcherTest::sanitizeForNotificationLeavesPlainTextUnchanged()
+{
+    QCOMPARE(NotificationDispatcher::sanitizeForNotification(QStringLiteral("Hello there, no markup here.")),
+             QStringLiteral("Hello there, no markup here."));
 }
 
 QTEST_GUILESS_MAIN(NotificationDispatcherTest)

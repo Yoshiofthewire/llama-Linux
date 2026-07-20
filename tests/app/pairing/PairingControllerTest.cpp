@@ -34,6 +34,10 @@ private slots:
     void pairFromDeepLinkMissingRequiredParam_data();
     void pairFromDeepLinkMissingRequiredParam();
     void pairFromDeepLinkRejectsNonNativePairHost();
+    void pairFromDeepLinkRejectsPlaintextHttpServerUrl();
+    void pairFromDeepLinkAllowsPlaintextHttpForLoopbackServerUrl();
+    void pairFromDeepLinkRejectsRegOnDifferentOriginThanSrv();
+    void pairFromDeepLinkNotifiesFreshPendingPairEvenWhenStateLabelUnchanged();
     void pairFromPastedLinkRejectsNonLinkTextWithNoNetworkCall();
     void refreshFromStoreReflectsPreSeededPairingStoreAndRemovePairingClears();
     void removePairingSkipsNetworkCallWhenNoDeviceSecretStored();
@@ -433,6 +437,181 @@ void PairingControllerTest::pairFromDeepLinkRejectsNonNativePairHost()
     QVERIFY(!controller.pairFromDeepLink(link));
     QCOMPARE(controller.pairingState(), QStringLiteral("failed"));
     QVERIFY(fake.receivedRequest().isEmpty());
+}
+
+void PairingControllerTest::pairFromDeepLinkRejectsPlaintextHttpServerUrl()
+{
+    // VibeSec regression guard: a MITM who rewrites an otherwise-legitimate
+    // https:// pairing link to http:// must not be able to make the app
+    // pair (and send the pairing token + real push deviceToken) in
+    // cleartext -- see PairingController.cpp's parseNativePairLink.
+    FakeRelayServer fake(httpResponse(200, "OK", R"({"ok":true,"deviceId":"should-not-be-used"})"));
+
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+
+    QTemporaryDir settingsDir;
+    QVERIFY(settingsDir.isValid());
+    SettingsStore settingsStore(settingsDir.filePath(QStringLiteral("settings.ini")));
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    NativeRegistrationClient client(http);
+    DeviceRegistrationService service(client, pairingStore, settingsStore);
+    DeregisterClient deregisterClient(http);
+
+    PairingController controller(service, pairingStore, settingsStore, deregisterClient);
+
+    QMap<QString, QString> params;
+    params[QStringLiteral("sub")] = QStringLiteral("sub-http");
+    // A non-loopback host over plaintext http -- must be rejected outright.
+    params[QStringLiteral("srv")] = QStringLiteral("http://mail.urlxl.com");
+    params[QStringLiteral("pt")] = QStringLiteral("pair-tok-http");
+
+    QVERIFY(!controller.pairFromDeepLink(buildLink(params)));
+
+    QCOMPARE(controller.pairingState(), QStringLiteral("failed"));
+    QVERIFY(!controller.isPaired());
+    QVERIFY(fake.receivedRequest().isEmpty());
+    QVERIFY(!pairingStore.load().has_value());
+}
+
+void PairingControllerTest::pairFromDeepLinkAllowsPlaintextHttpForLoopbackServerUrl()
+{
+    // Local/self-hosted development relays (and every other test in this
+    // file) legitimately use http://127.0.0.1:<port> -- the https-only rule
+    // must carve out loopback, not just accept https everywhere.
+    const QByteArray body = R"({"ok":true,"synced":true,"deviceId":"dev-loop","deviceSecret":"secret-loop",)"
+                             R"("devices":1,"deliveryMode":"pull",)"
+                             R"("pullEndpoint":"http://relay.example/api/notifications/native/pull",)"
+                             R"("transport":"unifiedpush"})";
+    FakeRelayServer fake(httpResponse(200, "OK", body));
+
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+
+    QTemporaryDir settingsDir;
+    QVERIFY(settingsDir.isValid());
+    SettingsStore settingsStore(settingsDir.filePath(QStringLiteral("settings.ini")));
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    NativeRegistrationClient client(http);
+    DeviceRegistrationService service(client, pairingStore, settingsStore);
+    DeregisterClient deregisterClient(http);
+
+    PairingController controller(service, pairingStore, settingsStore, deregisterClient);
+
+    QMap<QString, QString> params;
+    params[QStringLiteral("sub")] = QStringLiteral("sub-loop");
+    params[QStringLiteral("srv")] = QStringLiteral("http://127.0.0.1:%1").arg(fake.port());
+    params[QStringLiteral("pt")] = QStringLiteral("pair-tok-loop");
+
+    QVERIFY(controller.pairFromDeepLink(buildLink(params)));
+    QCOMPARE(controller.pairingState(), QStringLiteral("confirm"));
+    QVERIFY(controller.confirmPendingPair());
+    QCOMPARE(controller.pairingState(), QStringLiteral("paired"));
+}
+
+void PairingControllerTest::pairFromDeepLinkRejectsRegOnDifferentOriginThanSrv()
+{
+    // VibeSec regression guard: `reg` used to be able to point the actual
+    // registration POST (carrying the subscriberId/pairingToken/real push
+    // deviceToken) at a completely different host than `srv`, the only
+    // value the confirm dialog ever displays -- see
+    // PairingController.cpp's parseNativePairLink.
+    FakeRelayServer fake(httpResponse(200, "OK", R"({"ok":true,"deviceId":"should-not-be-used"})"));
+
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+
+    QTemporaryDir settingsDir;
+    QVERIFY(settingsDir.isValid());
+    SettingsStore settingsStore(settingsDir.filePath(QStringLiteral("settings.ini")));
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    NativeRegistrationClient client(http);
+    DeviceRegistrationService service(client, pairingStore, settingsStore);
+    DeregisterClient deregisterClient(http);
+
+    PairingController controller(service, pairingStore, settingsStore, deregisterClient);
+
+    QMap<QString, QString> params;
+    params[QStringLiteral("sub")] = QStringLiteral("sub-crossorigin");
+    params[QStringLiteral("srv")] = QStringLiteral("http://127.0.0.1:%1").arg(fake.port());
+    params[QStringLiteral("pt")] = QStringLiteral("pair-tok-crossorigin");
+    // reg points at a different host entirely -- the confirm dialog would
+    // still only ever show "127.0.0.1" from srv above.
+    params[QStringLiteral("reg")] = QStringLiteral("http://attacker.example/register");
+
+    QVERIFY(!controller.pairFromDeepLink(buildLink(params)));
+
+    QCOMPARE(controller.pairingState(), QStringLiteral("failed"));
+    QVERIFY(!controller.isPaired());
+    QVERIFY(fake.receivedRequest().isEmpty());
+    QVERIFY(!pairingStore.load().has_value());
+}
+
+void PairingControllerTest::pairFromDeepLinkNotifiesFreshPendingPairEvenWhenStateLabelUnchanged()
+{
+    // VibeSec regression guard: setPairingState() used to dedup on
+    // (state, error) alone, so a SECOND kypost://native-pair link arriving
+    // while the confirm dialog was already open (same "confirm"/"" state)
+    // silently swapped m_pendingPair to the new (attacker) link's params
+    // without ever emitting pairingStateChanged() -- pendingPairHost's
+    // QML binding never re-evaluated, so the dialog kept showing the FIRST
+    // link's host while "Pair" would have acted on the SECOND link's data.
+    FakeRelayServer fake(httpResponse(200, "OK", R"({"ok":true,"deviceId":"should-not-be-used"})"));
+
+    QTemporaryDir secureDir;
+    QVERIFY(secureDir.isValid());
+    SecureStoreFile secureStore(secureDir.path());
+    PairingStore pairingStore(secureStore);
+
+    QTemporaryDir settingsDir;
+    QVERIFY(settingsDir.isValid());
+    SettingsStore settingsStore(settingsDir.filePath(QStringLiteral("settings.ini")));
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    NativeRegistrationClient client(http);
+    DeviceRegistrationService service(client, pairingStore, settingsStore);
+    DeregisterClient deregisterClient(http);
+
+    PairingController controller(service, pairingStore, settingsStore, deregisterClient);
+
+    QMap<QString, QString> firstParams;
+    firstParams[QStringLiteral("sub")] = QStringLiteral("sub-first");
+    firstParams[QStringLiteral("srv")] = QStringLiteral("http://127.0.0.1:%1").arg(fake.port());
+    firstParams[QStringLiteral("pt")] = QStringLiteral("pair-tok-first");
+
+    QVERIFY(controller.pairFromDeepLink(buildLink(firstParams)));
+    QCOMPARE(controller.pairingState(), QStringLiteral("confirm"));
+    QCOMPARE(controller.pendingPairHost(), QStringLiteral("127.0.0.1"));
+
+    QSignalSpy stateChangedSpy(&controller, &PairingController::pairingStateChanged);
+
+    QMap<QString, QString> secondParams;
+    secondParams[QStringLiteral("sub")] = QStringLiteral("sub-second");
+    secondParams[QStringLiteral("srv")] = QStringLiteral("https://192.0.2.1"); // TEST-NET-1, deliberately unreachable
+    secondParams[QStringLiteral("pt")] = QStringLiteral("pair-tok-second");
+
+    QVERIFY(controller.pairFromDeepLink(buildLink(secondParams)));
+
+    // Still "confirm" (same label), but pairingStateChanged MUST fire again
+    // so a bound QML label re-reads pendingPairHost -- otherwise the UI
+    // shows stale (first link's) data while the pending params underneath
+    // have already moved to the second link's.
+    QCOMPARE(controller.pairingState(), QStringLiteral("confirm"));
+    QCOMPARE(controller.pendingPairHost(), QStringLiteral("192.0.2.1"));
+    QVERIFY(stateChangedSpy.count() >= 1);
 }
 
 void PairingControllerTest::pairFromPastedLinkRejectsNonLinkTextWithNoNetworkCall()

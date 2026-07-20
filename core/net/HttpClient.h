@@ -9,6 +9,7 @@
 #include <QPair>
 #include <QString>
 #include <QUrl>
+#include <functional>
 #include <optional>
 
 class QNetworkAccessManager;
@@ -53,12 +54,23 @@ public:
     // short override instead of waiting out the real default.
     explicit HttpClient(QNetworkAccessManager& manager, int transferTimeoutMs = 30000);
 
+    // Called with each redirect target get() is offered, when non-empty.
+    // Returning false stops the redirect from being followed -- the caller
+    // then sees the original (pre-redirect) response instead. Existing
+    // callers that don't pass one keep Qt's normal automatic-redirect
+    // behavior unchanged. See PgpQrController::scanQrPayload's use of this
+    // for the VibeSec finding it closes: a URL that legitimately passes a
+    // safety check (isSafeQrTarget) could otherwise still redirect the
+    // actual request to a target that check would have rejected.
+    using RedirectValidator = std::function<bool(const QUrl&)>;
+
     // HttpResult never decodes JSON: decoding into a concrete struct is each
     // Task 14-18 client's own responsibility (QJsonDocument::fromJson on
     // HttpResult::body, mapping a QJsonParseError to NetworkError::Decoding
     // if error is unset here but parsing still fails).
     HttpResult get(const QUrl& url, const QList<QPair<QString, QString>>& query,
-                   const QList<QPair<QString, QString>>& headers = {});
+                   const QList<QPair<QString, QString>>& headers = {},
+                   const RedirectValidator& redirectValidator = {});
 
     // Sets Content-Type: application/json.
     HttpResult post(const QUrl& url, const QList<QPair<QString, QString>>& query,
@@ -79,7 +91,7 @@ private:
     // already has — mirrors the Swift URL.appending(queryOrThrow:) extension.
     QUrl urlWithQuery(const QUrl& url, const QList<QPair<QString, QString>>& query) const;
 
-    HttpResult waitForReply(QNetworkReply* reply) const;
+    HttpResult waitForReply(QNetworkReply* reply, const RedirectValidator& redirectValidator = {}) const;
 
     QNetworkAccessManager& m_manager;
 };

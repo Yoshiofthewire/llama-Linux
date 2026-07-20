@@ -108,6 +108,24 @@ kypost_add_app_test(MailControllerTest
   LIBS KF6::I18n
 )
 
+# RemoteContentInterceptor (VibeSec fix): covers shouldBlockRemoteContentRequest(),
+# the pure decision logic behind interceptRequest() -- see
+# RemoteContentInterceptorTest.cpp's own comment for why interceptRequest()
+# itself (which needs a real QWebEngineUrlRequestInfo, no public
+# constructor) isn't directly testable. Needs Qt6::WebEngineCore for
+# QWebEngineUrlRequestInterceptor/QWebEngineUrlRequestInfo, and
+# Qt6::WebEngineQuick for QQuickWebEngineProfile -- installOn()'s
+# Q_INVOKABLE bridge (see RemoteContentInterceptor.h) takes one directly,
+# since QQuickWebEngineProfile::setUrlRequestInterceptor() isn't a QML
+# property in Qt6 the way it was in Qt5.
+find_package(Qt6 REQUIRED COMPONENTS WebEngineCore WebEngineQuick)
+kypost_add_app_test(RemoteContentInterceptorTest
+  SOURCES
+    app/mail/RemoteContentInterceptorTest.cpp
+    ${CMAKE_SOURCE_DIR}/app/mail/RemoteContentInterceptor.cpp
+  LIBS Qt6::WebEngineCore Qt6::WebEngineQuick
+)
+
 # ContactListModel/ContactsController (Task 33) live in app/contacts/, not
 # kypostcore -- same app/ test pattern as EmailListModelTest/MailControllerTest
 # above.
@@ -151,7 +169,20 @@ kypost_add_app_test(PgpQrControllerTest
   SOURCES
     app/pgp/PgpQrControllerTest.cpp
     ${CMAKE_SOURCE_DIR}/app/pgp/PgpQrController.cpp
+    ${CMAKE_SOURCE_DIR}/app/pgp/PgpQrTargetValidator.cpp
   LIBS Qt6::Gui KF6::I18n ZXing::ZXing
+)
+
+# PgpQrTargetValidator (VibeSec fix, extracted from PgpQrController so its
+# DNS-resolution-based link-local check is independently unit-testable with
+# an injected fake HostResolver -- see PgpQrTargetValidator.h) lives in
+# app/pgp/, not kypostcore -- same app/ test pattern as PgpQrControllerTest
+# above, but plain QtNetwork (QHostAddress/QHostInfo/QUrl), no extra LIBS
+# needed.
+kypost_add_app_test(PgpQrTargetValidatorTest
+  SOURCES
+    app/pgp/PgpQrTargetValidatorTest.cpp
+    ${CMAKE_SOURCE_DIR}/app/pgp/PgpQrTargetValidator.cpp
 )
 
 # PushPayloadParser (Task 40) lives in app/push/, not kypostcore -- same

@@ -25,6 +25,7 @@ private slots:
     void fetchKey403MapsToUnauthorizedWithStatusCode();
     void fetchKey404NoPgpIdentitySetsStatusCode();
     void fetchKey503MapsToServiceUnavailable();
+    void fetchKeyPassesRedirectValidatorThroughToHttpClient();
 };
 
 void PgpQrClientTest::fetchTokenSuccessParsesTokenExpiresAtAndUrl()
@@ -222,6 +223,40 @@ void PgpQrClientTest::fetchKey503MapsToServiceUnavailable()
     QVERIFY(result.error.has_value());
     QCOMPARE(*result.error, NetworkError::ServiceUnavailable);
     QCOMPARE(result.statusCode, 503);
+}
+
+void PgpQrClientTest::fetchKeyPassesRedirectValidatorThroughToHttpClient()
+{
+    // VibeSec regression guard: fetchKey must let the caller re-validate
+    // any redirect target (see HttpClient::RedirectValidator's doc
+    // comment) -- a URL that legitimately passes an initial safety check
+    // could otherwise still redirect the actual request somewhere that
+    // check would have rejected.
+    const QByteArray finalBody =
+        R"({"name":"Ada","fingerprint":"ABCD1234","publicKey":"-----BEGIN PGP PUBLIC KEY BLOCK-----"})";
+    FakeRelayServer finalServer(httpResponse(200, "OK", finalBody));
+
+    const QByteArray location =
+        QStringLiteral("http://127.0.0.1:%1/api/pgp/qr/key?t=tok-1").arg(finalServer.port()).toUtf8();
+    FakeRelayServer redirectingServer(
+        httpResponse(302, "Found", "", "text/plain", { { "Location", location } }));
+
+    QNetworkAccessManager manager;
+    HttpClient http(manager);
+    PgpQrClient client(http);
+
+    QStringList validated;
+    const HttpClient::RedirectValidator rejectAll = [&validated](const QUrl& target) {
+        validated.append(target.toString());
+        return false;
+    };
+
+    const QUrl qrUrl(QStringLiteral("http://127.0.0.1:%1/api/pgp/qr/key?t=tok-1").arg(redirectingServer.port()));
+    const PgpQrKeyResult result = client.fetchKey(qrUrl, rejectAll);
+
+    QVERIFY(result.error.has_value());
+    QCOMPARE(validated.size(), 1);
+    QVERIFY(validated.first().contains(QStringLiteral("/api/pgp/qr/key?t=tok-1")));
 }
 
 QTEST_GUILESS_MAIN(PgpQrClientTest)

@@ -1,13 +1,13 @@
 #pragma once
 
 #include "models/Contact.h"
+#include "net/HttpClient.h"
 #include "net/NetworkError.h"
 
 #include <QString>
 #include <QUrl>
 #include <optional>
 
-class HttpClient;
 struct RelayAuth;
 
 // Response from GET {serverBaseUrl}/api/pgp/qr/token -- the Go backend's
@@ -64,7 +64,11 @@ public:
     // param is the sole credential, and the scan target may be a different
     // server than the caller's own paired one, so this deliberately does
     // not go through the caller's own serverBaseUrl/RelayAuth at all.
-    PgpQrKeyResult fetchKey(const QUrl& qrUrl) const;
+    // redirectValidator is passed straight through to HttpClient::get() --
+    // see its own doc comment. PgpQrController passes isSafeQrTarget here
+    // so a redirect can't take the request somewhere the initial URL check
+    // would have rejected.
+    PgpQrKeyResult fetchKey(const QUrl& qrUrl, const HttpClient::RedirectValidator& redirectValidator = {}) const;
 
 private:
     HttpClient& m_httpClient;

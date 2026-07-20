@@ -58,6 +58,20 @@ target_sources(kypost PRIVATE
   mail/MailController.h
 )
 
+# RemoteContentInterceptor (VibeSec fix): installed as EmailDetail.qml's
+# WebEngineView.profile.urlRequestInterceptor to block CSS/media remote
+# fetches that QWebEngineSettings::AutoLoadImages never gated in the first
+# place -- see its own class doc comment. Needs Qt6::WebEngineCore directly
+# for QWebEngineUrlRequestInterceptor/QWebEngineUrlRequestInfo (transitively
+# pulled in by Qt6::WebEngineQuick above at the library level, but the C++
+# headers need the component named explicitly here).
+find_package(Qt6 REQUIRED COMPONENTS WebEngineCore)
+target_sources(kypost PRIVATE
+  mail/RemoteContentInterceptor.cpp
+  mail/RemoteContentInterceptor.h
+)
+target_link_libraries(kypost PRIVATE Qt6::WebEngineCore)
+
 # ContactsController/ContactListModel (Task 33) wrap core/domain's
 # ContactSyncRepository as a QML singleton ("ContactsApp") -- QObject/
 # QAbstractListModel/QVariant, so app/ per the core/ boundary rule, same as
@@ -99,6 +113,8 @@ target_sources(kypost PRIVATE
   pgp/PgpQrController.h
   pgp/PgpQrScanner.cpp
   pgp/PgpQrScanner.h
+  pgp/PgpQrTargetValidator.cpp
+  pgp/PgpQrTargetValidator.h
 )
 target_link_libraries(kypost PRIVATE ZXing::ZXing Qt6::Multimedia)
 

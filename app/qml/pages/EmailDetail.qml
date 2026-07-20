@@ -459,6 +459,30 @@ Item {
                 settings.javascriptEnabled: false
                 settings.autoLoadImages: root.imagesLoaded
 
+                // VibeSec fix: settings.autoLoadImages above only gates
+                // Blink's "Image" resource-loading policy -- a sender's
+                // <link rel="stylesheet">, CSS @import, or <video>/<audio>
+                // source fired a tracking-pixel-equivalent remote request
+                // even with autoLoadImages false, since those are separate
+                // "Stylesheet"/"Media" policies AutoLoadImages doesn't
+                // touch. This profile's interceptor blocks every request
+                // except the initial document load while imagesLoaded is
+                // false, closing that gap; see RemoteContentInterceptor's
+                // own class doc comment.
+                // QQuickWebEngineProfile.setUrlRequestInterceptor() is a
+                // plain C++ method in Qt6 (not a Q_PROPERTY as it was in
+                // Qt5's QML API), so it can't be assigned declaratively --
+                // wired up imperatively via RemoteContentInterceptor's own
+                // installOn() Q_INVOKABLE instead.
+                profile: WebEngineProfile {
+                    id: emailProfile
+                    Component.onCompleted: contentInterceptor.installOn(emailProfile)
+                }
+
+                property RemoteContentInterceptor contentInterceptor: RemoteContentInterceptor {
+                    imagesLoaded: root.imagesLoaded
+                }
+
                 // VibeSec fix: this used to only reject LinkClickedNavigation,
                 // leaving every other navigationType -- including a
                 // RedirectNavigation/OtherNavigation triggered by an

@@ -4,6 +4,7 @@
 #include "domain/PgpQrRepository.h"
 #include "net/NetworkError.h"
 #include "net/PgpQrClient.h"
+#include "pgp/PgpQrTargetValidator.h"
 
 #include <KLocalizedString>
 
@@ -14,44 +15,9 @@
 #include <ZXing/WriteBarcode.h>
 
 #include <QBuffer>
-#include <QHostAddress>
 #include <QImage>
 #include <QUrl>
 #include <QVariantList>
-
-namespace {
-
-// Blocks the two classes of scanQrPayload() target that would turn a QR
-// scan into something worse than "fetch a key from wherever it points":
-// non-http(s) schemes (file:// would read local files back as if they were
-// key material) and link-local/cloud-metadata addresses (169.254.0.0/16 --
-// AWS/Azure/DigitalOcean's metadata IP, plus GCP's metadata.google.internal
-// hostname). Arbitrary *http(s)* hosts, including LAN/private IPs, are
-// intentionally still allowed -- scanQrPayload()'s own comment below notes
-// the scanned server is expected to often be a different, independently
-// self-hosted Relay instance than this device's own paired one, and
-// self-hosted instances commonly live on a home LAN or even localhost (see
-// PgpQrControllerTest's FakeRelayServer fixtures, which target 127.0.0.1).
-bool isSafeQrTarget(const QUrl& url)
-{
-    if (url.scheme().compare(QStringLiteral("http"), Qt::CaseInsensitive) != 0
-        && url.scheme().compare(QStringLiteral("https"), Qt::CaseInsensitive) != 0)
-        return false;
-
-    const QString host = url.host();
-    if (host.isEmpty())
-        return false;
-    if (host.compare(QStringLiteral("metadata.google.internal"), Qt::CaseInsensitive) == 0)
-        return false;
-
-    QHostAddress addr;
-    if (addr.setAddress(host) && addr.isLinkLocal())
-        return false;
-
-    return true;
-}
-
-} // namespace
 
 PgpQrController::PgpQrController(PgpQrRepository& repository, PgpQrClient& client, QObject* parent)
     : QObject(parent)
@@ -182,7 +148,14 @@ void PgpQrController::scanQrPayload(const QString& decodedText)
     }
 
     setBusy(true);
-    const PgpQrKeyResult result = m_client.fetchKey(qrUrl);
+    // VibeSec finding: a URL that legitimately passes isSafeQrTarget above
+    // could still 302 the actual fetch to a link-local/metadata address --
+    // HttpClient follows redirects by default, and that redirect target was
+    // never re-validated. Passing isSafeQrTarget through as fetchKey's
+    // redirect validator closes that gap: every hop, not just the
+    // QR-encoded URL itself, has to pass the same check.
+    const PgpQrKeyResult result =
+        m_client.fetchKey(qrUrl, [](const QUrl& target) { return isSafeQrTarget(target); });
     setBusy(false);
 
     if (!result.error.has_value()) {

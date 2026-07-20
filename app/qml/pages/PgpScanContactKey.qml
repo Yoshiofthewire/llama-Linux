@@ -103,6 +103,19 @@ Item {
             Text {
                 Layout.fillWidth: true
                 text: PgpQr.scannedName
+                // VibeSec fix: Text.textFormat defaults to Text.AutoText,
+                // which renders HTML-like content as rich text -- including
+                // fetching <img src> remotely (Qt's own docs warn about
+                // exactly this). scannedName is server-controlled and
+                // renders the instant a scan completes, with no user
+                // action -- an attacker-controlled server (any host that
+                // otherwise honestly passes isSafeQrTarget) could return an
+                // <img> tag pointing at an internal/metadata address and
+                // get it fetched via Qt Quick's own network stack,
+                // completely bypassing isSafeQrTarget. Explicit PlainText
+                // closes that off; this is untrusted display data, never
+                // meant to carry formatting.
+                textFormat: Text.PlainText
                 color: Theme.inkStrong
                 font.family: Theme.fontUi
                 font.pixelSize: 16
@@ -113,6 +126,8 @@ Item {
             Text {
                 Layout.fillWidth: true
                 text: PgpQr.scannedFingerprint
+                // Same VibeSec fix as scannedName above.
+                textFormat: Text.PlainText
                 color: Theme.inkStrong
                 font.family: Theme.fontMono
                 font.pixelSize: 13

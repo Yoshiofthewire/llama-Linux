@@ -1,6 +1,7 @@
 #include "contacts/ContactsController.h"
 #include "general/GeneralController.h"
 #include "mail/MailController.h"
+#include "mail/RemoteContentInterceptor.h"
 #include "pairing/MfaController.h"
 #include "pairing/PairingController.h"
 #include "pgp/PgpQrController.h"
@@ -512,6 +513,11 @@ int main(int argc, char* argv[])
     // PgpScanContactKey.qml instantiates one per scan screen, attaching it
     // to the live VideoOutput's videoSink (see PgpQrScanner.h's doc comment).
     qmlRegisterType<PgpQrScanner>("com.urlxl.mail", 1, 0, "PgpQrScanner");
+
+    // VibeSec fix: EmailDetail.qml instantiates one of these per its
+    // WebEngineProfile, binding its imagesLoaded property to the "Show
+    // images" toggle -- see RemoteContentInterceptor.h's class doc comment.
+    qmlRegisterType<RemoteContentInterceptor>("com.urlxl.mail", 1, 0, "RemoteContentInterceptor");
 
     // Task 34: QML-facing bridge over deviceRegistrationService/pairingStore
     // (both constructed above). Refreshes its isPaired/pairedServerHost/

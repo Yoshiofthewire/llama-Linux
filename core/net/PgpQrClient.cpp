@@ -42,9 +42,9 @@ PgpQrTokenResult PgpQrClient::fetchToken(const QUrl& serverBaseUrl, const RelayA
     return out;
 }
 
-PgpQrKeyResult PgpQrClient::fetchKey(const QUrl& qrUrl) const
+PgpQrKeyResult PgpQrClient::fetchKey(const QUrl& qrUrl, const HttpClient::RedirectValidator& redirectValidator) const
 {
-    const HttpClient::HttpResult result = m_httpClient.get(qrUrl, {});
+    const HttpClient::HttpResult result = m_httpClient.get(qrUrl, {}, {}, redirectValidator);
 
     PgpQrKeyResult out;
     out.statusCode = result.statusCode;

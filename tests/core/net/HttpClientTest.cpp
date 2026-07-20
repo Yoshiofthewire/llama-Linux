@@ -23,6 +23,9 @@ private slots:
     void delSendsQueryParamsWithNoBody();
     void transportFailureWhenNothingListens();
     void transportFailureWhenServerHangs();
+    void getFollowsRedirectWhenValidatorApprovesTarget();
+    void getDoesNotFollowRedirectWhenValidatorRejectsTarget();
+    void getFollowsRedirectByDefaultWhenNoValidatorGiven();
 };
 
 void HttpClientTest::getSuccessReturnsBodyUnmodifiedAndPreservesExistingQuery()
@@ -172,6 +175,89 @@ void HttpClientTest::transportFailureWhenServerHangs()
     QVERIFY(!result.detail.isEmpty());
 
     delete accepted;
+}
+
+void HttpClientTest::getFollowsRedirectWhenValidatorApprovesTarget()
+{
+    const QByteArray finalBody = "{\"ok\":true,\"from\":\"final\"}";
+    FakeRelayServer finalServer(httpResponse(200, "OK", finalBody));
+
+    const QByteArray location =
+        QStringLiteral("http://127.0.0.1:%1/final").arg(finalServer.port()).toUtf8();
+    FakeRelayServer redirectingServer(
+        httpResponse(302, "Found", "", "text/plain", { { "Location", location } }));
+
+    QNetworkAccessManager manager;
+    HttpClient client(manager);
+
+    QStringList approvedTargets;
+    const HttpClient::RedirectValidator approveAll = [&approvedTargets](const QUrl& target) {
+        approvedTargets.append(target.toString());
+        return true;
+    };
+
+    const QUrl url(QStringLiteral("http://127.0.0.1:%1/start").arg(redirectingServer.port()));
+    const HttpClient::HttpResult result = client.get(url, {}, {}, approveAll);
+
+    QVERIFY(!result.error.has_value());
+    QCOMPARE(result.statusCode, 200);
+    QCOMPARE(result.body, finalBody);
+    QCOMPARE(approvedTargets.size(), 1);
+    QVERIFY(approvedTargets.first().contains(QStringLiteral("/final")));
+}
+
+void HttpClientTest::getDoesNotFollowRedirectWhenValidatorRejectsTarget()
+{
+    // VibeSec regression guard: a redirect target must be re-validated by
+    // the caller-supplied validator, not followed blindly -- otherwise a
+    // URL that legitimately passes an initial safety check (e.g.
+    // isSafeQrTarget) could still redirect the actual request to a
+    // link-local/metadata address.
+    const QByteArray finalBody = "{\"ok\":true,\"from\":\"final\"}";
+    FakeRelayServer finalServer(httpResponse(200, "OK", finalBody));
+
+    const QByteArray location =
+        QStringLiteral("http://127.0.0.1:%1/final").arg(finalServer.port()).toUtf8();
+    FakeRelayServer redirectingServer(
+        httpResponse(302, "Found", "", "text/plain", { { "Location", location } }));
+
+    QNetworkAccessManager manager;
+    HttpClient client(manager);
+
+    const HttpClient::RedirectValidator rejectAll = [](const QUrl&) { return false; };
+
+    const QUrl url(QStringLiteral("http://127.0.0.1:%1/start").arg(redirectingServer.port()));
+    const HttpClient::HttpResult result = client.get(url, {}, {}, rejectAll);
+
+    // The redirect was never followed, and the rejection surfaces as a
+    // clear failure -- not a misleadingly "successful" 302 response the
+    // caller might mistake for legitimate data, and definitely not the
+    // final server's body.
+    QVERIFY(result.error.has_value());
+    QVERIFY(result.body != finalBody);
+}
+
+void HttpClientTest::getFollowsRedirectByDefaultWhenNoValidatorGiven()
+{
+    // Every other existing caller (no redirectValidator argument) keeps
+    // Qt's normal automatic-redirect-following behavior unchanged.
+    const QByteArray finalBody = "{\"ok\":true,\"from\":\"final\"}";
+    FakeRelayServer finalServer(httpResponse(200, "OK", finalBody));
+
+    const QByteArray location =
+        QStringLiteral("http://127.0.0.1:%1/final").arg(finalServer.port()).toUtf8();
+    FakeRelayServer redirectingServer(
+        httpResponse(302, "Found", "", "text/plain", { { "Location", location } }));
+
+    QNetworkAccessManager manager;
+    HttpClient client(manager);
+
+    const QUrl url(QStringLiteral("http://127.0.0.1:%1/start").arg(redirectingServer.port()));
+    const HttpClient::HttpResult result = client.get(url, {});
+
+    QVERIFY(!result.error.has_value());
+    QCOMPARE(result.statusCode, 200);
+    QCOMPARE(result.body, finalBody);
 }
 
 QTEST_GUILESS_MAIN(HttpClientTest)
